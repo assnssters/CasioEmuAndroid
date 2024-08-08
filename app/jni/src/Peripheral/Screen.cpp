@@ -88,9 +88,9 @@ namespace casioemu {
 				ink_alpha_off = 0;
 			float ratio = 0;
 			if constexpr (hardware_id == HW_ES_PLUS)
-				ratio = 1 - 1e-3;
+				ratio = 1 - 1e-4;
 			else
-				ratio = 1 - 5e-3;
+				ratio = 1 - 5e-4;
 			bool enable_status, enable_dotmatrix, clear_dots;
 
 			auto screen_buffer = this->screen_buffer;

@@ -229,10 +229,10 @@ namespace casioemu {
 					"##search"
 #endif
 					,
-					search_txt, 200);
+					search_txt, 300);
 				ImGui::SameLine();
 				const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p"};
-				ImGui::SetNextItemWidth(80);
+				ImGui::SetNextItemWidth(240);
 				if (ImGui::BeginCombo("##cb", current_filter)) {
 					for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
 						bool is_selected = (current_filter == items[n]); // You can store your selection however you want, outside or inside your objects
@@ -248,7 +248,7 @@ namespace casioemu {
 #if LANGUAGE == 2
 					"不要显示模拟器 Rom"
 #else
-					"Don't show emulator roms"
+					"No emu roms"
 #endif
 					,
 					&not_show_emu);
@@ -351,7 +351,7 @@ std::string sui_loop() {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-    io.FontGlobalScale = 4;
+    io.FontGlobalScale = 3;
     ImFontConfig config{};
     //config.OversampleH = 4;
     //config.OversampleV = 4;
@@ -378,11 +378,12 @@ std::string sui_loop() {
 
 	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 	ImGuiStyle& style = ImGui::GetStyle();
-	style.WindowRounding = 4.0f;
+	style.WindowRounding = 12.0f;
 	style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-	style.FrameRounding = 4.0f;
+	style.FrameRounding = 8.0f;
     style.ScrollbarSize = 40.f;
-    style.ItemInnerSpacing = {10.0f,10.0f};
+    style.FramePadding = {8.f,8.f};
+    style.ItemInnerSpacing = {20.0f,20.0f};
     style.ItemSpacing = {20.0f,20.0f};
 
     // Setup Platform/Renderer backends

@@ -59,7 +59,7 @@ int SDL_main(int argc, char* argv[]) {
 		while (1) {
 			if (!busy)
 				SDL_PushEvent(&se);
-			SDL_Delay(1);
+			SDL_Delay(24);
 		}
 	});
 	t3.detach();
@@ -108,3 +108,4 @@ int SDL_main(int argc, char* argv[]) {
 	}
 	return 0;
 }
+

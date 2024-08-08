@@ -21,7 +21,7 @@ find_library(SDL2_image SDL2_image)
 
 add_library(main SHARED)
 
-# 搜索 src 目录下的所有 .cpp 文件
+# 搜索 src 目录下的所有 .cpp 文件 
 file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/src/*.cpp)
 
 target_sources(main PRIVATE ${SOURCES})

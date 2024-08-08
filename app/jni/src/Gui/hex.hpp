@@ -112,7 +112,7 @@ struct MemoryEditor {
 		// Settings
 		Open = true;
 		ReadOnly = false;
-		Cols = 16;
+		Cols = 8;
 		OptShowOptions = true;
 		OptShowDataPreview = false;
 		OptShowHexII = false;

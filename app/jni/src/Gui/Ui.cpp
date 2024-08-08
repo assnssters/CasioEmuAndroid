@@ -68,6 +68,33 @@ void gui_loop() {
 	for (auto win : windows) {
 		win->Render();
 	}
+    ImGui::SetNextWindowBgAlpha(0.0f); // 设置透明背景
+    ImGui::Begin("Overlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove);
+
+    ImGui::SetWindowPos(ImVec2(0, 0)); // 设置窗口位置，这决定了按钮的位置
+    static UIWindow* current_filter = 0;
+    if (ImGui::BeginCombo("##cb", current_filter ? current_filter->name : 0)) {
+        for (int n = 0; n < windows.size(); n++) {
+            bool is_selected = (current_filter == windows[n]); // You can store your selection however you want, outside or inside your objects
+            if (ImGui::Selectable(windows[n]->name, is_selected))
+                current_filter = windows[n];
+            if (is_selected)
+                ImGui::SetItemDefaultFocus(); // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Open")) {
+if(current_filter != 0)
+    current_filter->open = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Close all")) {
+        for(auto& win:windows){
+            win->open = false;
+        }
+    }
+    ImGui::End();
 	ImGui::Render();
 	SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
@@ -116,6 +143,7 @@ style.ScrollbarSize = 40.f;
 style.ScrollbarRounding = 4.0f;
     style.ItemInnerSpacing = {10.0f,10.0f};
     style.ItemSpacing = {20.0f,20.0f};
+    style.GrabMinSize = 40.f;
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
@@ -137,7 +165,13 @@ style.ScrollbarRounding = 4.0f;
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);
-	return 0;
+
+    for(auto item: windows){
+        item->open = false;
+    }
+
+
+    return 0;
 }
 
 void gui_cleanup() {

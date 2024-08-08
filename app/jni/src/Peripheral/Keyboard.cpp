@@ -11,6 +11,7 @@
 #include <fstream>
 #include <thread>
 #include <unordered_map>
+#include "vibration.h"
 
 namespace casioemu {
 	class Keyboard : public Peripheral {
@@ -399,7 +400,6 @@ namespace casioemu {
 
 	void Keyboard::PressButton(Button& button, bool stick) {
 		bool old_pressed = button.pressed;
-
 		if (stick) {
 			button.stuck = !button.stuck;
 			button.pressed = button.stuck;
@@ -416,11 +416,13 @@ namespace casioemu {
 		}
 		if (button.pressed && button.type == Button::BT_BUTTON) {
 			SDL_Log("ki: %d,ko: %d\n", (int)(log(button.ki_bit) / log(2)), (int)(log(button.ko_bit) / log(2)));
+
+            SDL_Log("Vibrated.");
+            Vibration::vibrate(50);
 		}
 
 		if (button.type == Button::BT_BUTTON) {
 			if (real_hardware) {
-
 				RecalculateGhost();
 			}
 			else {
