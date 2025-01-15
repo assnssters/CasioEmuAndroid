@@ -10,20 +10,20 @@ extern casioemu::MMU* me_mmu;
 extern casioemu::Emulator* m_emu;
 class UIWindow {
 public:
-	UIWindow(const char* name) : name(name) {}
-	const char* name{};
-	bool open = true;
-	ImVec2 inital_size{800, 800};
-	ImGuiWindowFlags flags{};
-	virtual void Render() {
-		if (!open)
-			return;
-		ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
-		if (ImGui::Begin(name, &open, flags)) {
-			RenderCore();
-		}
-		ImGui::End();
-	}
-	virtual void RenderCore() = 0;
+    UIWindow(const char* name) : name(name) {}
+    virtual ~UIWindow() = default;
+    const char* name{};
+    bool open = true;
+    ImVec2 inital_size{800, 800};
+    ImGuiWindowFlags flags{};
+    virtual void Render() {
+        if (!open)
+            return;
+        ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
+        if (ImGui::Begin(name, &open, flags)) {
+            RenderCore();
+        }
+        ImGui::End();
+    }
+    virtual void RenderCore() = 0;
 };
-constexpr ImGuiTableFlags pretty_table = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Reorderable ;

@@ -1,45 +1,49 @@
-﻿#include "LabelViewer.h"
+#include "LabelViewer.h"
 #include "../Models.h"
 #include "Ui.hpp"
 #include "imgui/imgui.h"
 #include "stringhelper.h"
+#include "UIScaling.h"
+
 void LabelViewer::RenderCore() {
-	ImGui::Text("Avaliable in this model:");
-	ImGui::Separator();
-	auto labels = casioemu::GetCommonMemLabels(m_emu->hardware_id);
-	std::sort(labels.begin(), labels.end());
-	char buf[32];
-	int i = 40;
-	for (const auto& lb : labels) {
-		ImGui::PushID(i++);
-		if (ImGui::Button("Copy")) {
-			sprintf(buf, "%X", lb.start);
-			ImGui::SetClipboardText(buf);
-		}
-		ImGui::PopID();
-		ImGui::SameLine(60, 0);
-		ImGui::Text("%X", lb.start);
-		ImGui::SameLine(120, 0);
-		std::string desc = lb.desc;
-		ltrim(desc);
-		ImGui::Text("%s",desc.c_str());
-		ImGui::Separator();
-	}
-	ImGui::Text("SFRs in this model:");
-	ImGui::Separator();
-	auto regs = me_mmu->GetRegions();
-	std::sort(regs.begin(), regs.end(), [](casioemu::MMURegion* a, casioemu::MMURegion* b) { return a->base < b->base; });
-	for (auto lb : regs) {
-		ImGui::PushID(i++);
-		if (ImGui::Button("Copy")) {
-			sprintf(buf, "%X", lb->base);
-			ImGui::SetClipboardText(buf);
-		}
-		ImGui::PopID();
-		ImGui::SameLine(60, 0);
-		ImGui::Text("%X", lb->base);
-		ImGui::SameLine(120, 0);
-		ImGui::Text("%s",lb->description.c_str());
-		ImGui::Separator();
-	}
+    UI::Scaling::UpdateUIScale(); // Cập nhật các giá trị scale
+
+    ImGui::Text("Avaliable in this model:");
+    ImGui::Separator();
+    auto labels = casioemu::GetCommonMemLabels(m_emu->hardware_id);
+    std::sort(labels.begin(), labels.end());
+    char buf[32];
+    int i = 40;
+    for (const auto& lb : labels) {
+        ImGui::PushID(i++);
+        if (ImGui::Button("Copy")) {
+            sprintf(buf, "%X", lb.start);
+            ImGui::SetClipboardText(buf);
+        }
+        ImGui::PopID();
+        ImGui::SameLine(UI::Scaling::minColumnWidth, 0);
+        ImGui::Text("%X", lb.start);
+        ImGui::SameLine(UI::Scaling::minColumnWidth * 2, 0);
+        std::string desc = lb.desc;
+        ltrim(desc);
+        ImGui::Text("%s", desc.c_str());
+        ImGui::Separator();
+    }
+    ImGui::Text("SFRs in this model:");
+    ImGui::Separator();
+    auto regs = me_mmu->GetRegions();
+    std::sort(regs.begin(), regs.end(), [](casioemu::MMURegion* a, casioemu::MMURegion* b) { return a->base < b->base; });
+    for (auto lb : regs) {
+        ImGui::PushID(i++);
+        if (ImGui::Button("Copy")) {
+            sprintf(buf, "%X", lb->base);
+            ImGui::SetClipboardText(buf);
+        }
+        ImGui::PopID();
+        ImGui::SameLine(UI::Scaling::minColumnWidth, 0);
+        ImGui::Text("%X", lb->base);
+        ImGui::SameLine(UI::Scaling::minColumnWidth * 2, 0);
+        ImGui::Text("%s", lb->description.c_str());
+        ImGui::Separator();
+    }
 }
