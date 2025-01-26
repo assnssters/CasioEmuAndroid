@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <filesystem>
 #include <imgui.h>
 inline const ImWchar* GetKanji() {
@@ -19,18 +19,25 @@ inline const ImWchar* GetKanji() {
 	};
 	return &ranges[0];
 }
-inline void SetupDefaultFont() {
+inline void RebuildFont(float scale = 0.0f) {
 	auto& io = ImGui::GetIO();
 	ImFontConfig config = ImFontConfig();
 	// config.MergeMode = true;
 #ifdef __ANDROID__
-    config.OversampleH = config.OversampleV = 3.0;
-    config.SizePixels = 15;
+   constexpr float defaultscale = 3.0f;
+#else
+   constexpr float defaultscale = 1.0f;
 #endif
+   if(scale == 0){
+scale=defaultscale;
+   }
+    config.OversampleH = config.OversampleV = scale;
 	if (std::filesystem::exists("C:\\Windows\\Fonts\\CascadiaCode.ttf"))
 		io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\CascadiaCode.ttf", 15);
+    else if (std::filesystem::exists("/system/fonts/DroidSansMono.ttf"))
+        io.Fonts->AddFontFromFileTTF("/system/fonts/DroidSansMono.ttf", 15);
 	else {
-		printf("[Ui][Warn] \"CascadiaCode.ttf\" not found\n");
+		printf("[Ui][Warn] Monospace font not found\n");
 		io.Fonts->AddFontDefault(&config);
 	}
 #if LANGUAGE == 2
@@ -47,9 +54,7 @@ inline void SetupDefaultFont() {
 #endif
 	// config.GlyphOffset = ImVec2(0,1.5);
 	io.Fonts->Build();
-#ifdef __ANDROID__
-    io.FontGlobalScale = 3.0;
-#endif
+    io.FontGlobalScale = scale;
 };
 inline void SetupDefaultTheme() {
 	ImGui::StyleColorsDark();
