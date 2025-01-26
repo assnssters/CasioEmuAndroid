@@ -1,11 +1,11 @@
 ﻿#include "IOPorts.hpp"
 
-#include "../Chipset/Chipset.hpp"
-#include "../Chipset/MMU.hpp"
-#include "../Chipset/CPU.hpp"
-#include "../Emulator.hpp"
-#include "../Logger.hpp"
-#include "../Gui/Ui.hpp"
+#include "Chipset/Chipset.hpp"
+#include "Chipset/MMU.hpp"
+#include "Chipset/CPU.hpp"
+#include "Emulator.hpp"
+#include "Logger.hpp"
+#include "Gui/Ui.hpp"
 
 namespace casioemu {
 	void IOPorts::Initialise() {
@@ -71,6 +71,9 @@ namespace casioemu {
 				}
 			},
 			emulator);
+
+		if (emulator.hardware_id == HW_CLASSWIZ_II)
+			region_port0_unk.Setup(p0_base + 6, 1, "Port0/Unk", &port0_unk, MMURegion::DefaultRead<uint8_t, 0x11>, MMURegion::DefaultWrite<uint8_t, 0x11>, emulator);
 
 		region_port1_data.Setup(
 			0xF220, 1, "Port1/Data", this, [](MMURegion* region, size_t) {

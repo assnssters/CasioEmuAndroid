@@ -1,8 +1,9 @@
 ﻿#include "MMURegion.hpp"
 
-#include "../Emulator.hpp"
+#include "Emulator.hpp"
 #include "Chipset.hpp"
 #include "MMU.hpp"
+#include <functional>
 
 namespace casioemu
 {

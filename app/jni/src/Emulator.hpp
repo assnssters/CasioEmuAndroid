@@ -47,6 +47,8 @@ namespace casioemu
 		std::string model_path;
 		bool pause_on_mem_error;
 
+		std::atomic<bool> screenshot_requested{};
+
 		std::thread *tick_thread;
 
 		SpriteInfo interface_background;

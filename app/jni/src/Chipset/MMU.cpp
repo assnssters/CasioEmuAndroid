@@ -1,11 +1,11 @@
 ﻿#include "MMU.hpp"
 
-#include "../Emulator.hpp"
-#include "../Gui/Hooks.h"
-#include "../Gui/Ui.hpp"
-#include "../Logger.hpp"
 #include "CPU.hpp"
 #include "Chipset.hpp"
+#include "Emulator.hpp"
+#include "Gui/Hooks.h"
+#include "Gui/Ui.hpp"
+#include "Logger.hpp"
 #include <cstring>
 
 namespace casioemu {
@@ -36,7 +36,7 @@ namespace casioemu {
 	}
 
 	inline uint16_t le_read(uint8_t& a) {
-		return *(uint16_t*)&a; // TODO: impl for a BE machine?
+		return *(uint16_t*)&a;
 	}
 
 	uint16_t MMU::ReadCode(size_t offset) {
@@ -62,12 +62,13 @@ namespace casioemu {
 				return le_read(rom[offset]);
 			else
 				return 0;
+		case HW_TI:
 		case HW_CLASSWIZ:
 			if (emulator.chipset.SegmentAccess && segment_index == 5)
 				segment_index = 0;
 			if (segment_index < 4) {
 				if (emulator.chipset.remap)
-					return le_read(rom[offset + (segment_index == 0 && segment_offset < 0x200) ? 0xFE00 : 0]);
+					return le_read(rom[offset + ((segment_index == 0 && segment_offset < 0x200) ? 0xFE00 : 0)]);
 				else
 					return (segment_index == 0 && segment_offset >= 0xFE00) ? 0xFFFF : le_read(rom[offset]);
 			}
@@ -76,14 +77,14 @@ namespace casioemu {
 			if (segment_index == 8)
 				return le_read(rom[offset & 0x7ffff]);
 			segment_index &= 7;
-			// if (segment_index == 7) {
-			//	if (segment_offset >= 0x2000) {
-			//		return 0xffff;
-			//	}
-			//	else {
-			//		return rom[0x5E000 + segment_offset];
-			//	}
-			// }
+			if (segment_index == 7) {
+				if (segment_offset >= 0x2000) {
+					return 0xffff;
+				}
+				else {
+					return le_read(rom[0x5E000 + segment_offset]);
+				}
+			}
 			if (segment_index > 6)
 				return 0xFFFF;
 			if (segment_index == 5) {
@@ -91,7 +92,7 @@ namespace casioemu {
 					return 0xFFFF;
 			}
 			if (emulator.chipset.remap)
-				return le_read(rom[offset + (segment_index == 0 && segment_offset < 0x200) ? 0xFE00 : 0]);
+				return le_read(rom[offset + ((segment_index == 0 && segment_offset < 0x200) ? 0xFE00 : 0)]);
 			else
 				return (segment_index == 0 && segment_offset >= 0xFE00) ? 0xFFFF : le_read(rom[offset]);
 		case HW_FX_5800P:
@@ -104,20 +105,21 @@ namespace casioemu {
 			return 0;
 		}
 	}
-
-	static size_t writing_addr = 0;
-	static size_t write_cycle = 0;
-	static int flash_mode = 0;
-
 	uint8_t MMU::ReadData(size_t offset, bool softwareRead) {
 		// if (offset >= (1 << 24))
 		//	PANIC("offset doesn't fit 24 bits\n");
+#ifdef DBG
+		if (offset == 0x60722) { // Debug printf
 
-		MemoryEventArgs mea{};
-		mea.offset = offset;
-		RaiseEvent(on_memory_read, *this, mea);
-		if (mea.handled)
-			return mea.value;
+		}
+		if (softwareRead) {
+			MemoryEventArgs mea{};
+			mea.offset = static_cast<uint32_t>(offset);
+			RaiseEvent(on_memory_read, *this, mea);
+			if (mea.handled)
+				return mea.value;
+		}
+#endif
 
 		/*
 		things about accessing unmapped segment is actually far more complex on real hardware;
@@ -158,10 +160,9 @@ namespace casioemu {
 		MemoryByte& byte = segment[segment_offset];
 		MMURegion* region = byte.region;
 
-		if (!region) {
+		if (!region || !region->read) {
 			return 0;
 		}
-
 		return region->read(region, offset);
 	}
 
@@ -169,17 +170,20 @@ namespace casioemu {
 		// if (offset >= (1 << 24))
 		//	PANIC("offset doesn't fit 24 bits\n");
 
+#ifdef DBG
 		if (offset == 0x60721) {
 			std::cout << data;
 			return;
 		}
-
-		MemoryEventArgs mea{};
-		mea.offset = offset;
-		mea.value = data;
-		RaiseEvent(on_memory_write, *this, mea);
-		if (mea.handled)
-			return;
+		if (softwareWrite) {
+			MemoryEventArgs mea{};
+			mea.offset = static_cast<uint32_t>(offset);
+			mea.value = data;
+			RaiseEvent(on_memory_write, *this, mea);
+			if (mea.handled)
+				return;
+		}
+#endif
 
 		size_t segment_index = offset >> 16;
 		size_t segment_offset = offset & 0xFFFF;
@@ -191,8 +195,10 @@ namespace casioemu {
 
 		MemoryByte& byte = segment[segment_offset];
 		MMURegion* region = byte.region;
-
-		if (!region) {
+		if (!region || !region->write) {
+#ifdef DBG
+			printf("[MMU][Warn] Unmapped write: %x <- %x\n", (uint32_t)offset, (uint32_t)data);
+#endif
 			return;
 		}
 		region->write(region, offset, data);

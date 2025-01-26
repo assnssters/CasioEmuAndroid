@@ -1,14 +1,16 @@
 ﻿#include "CPU.hpp"
 
-#include "../Emulator.hpp"
-#include "../Gui/CodeViewer.hpp"
-#include "../Gui/Hooks.h"
-#include "../Logger.hpp"
 #include "Chipset.hpp"
+#include "Emulator.hpp"
+#include "Gui/CodeViewer.hpp"
+#include "Gui/Hooks.h"
+#include "Logger.hpp"
 #include "MMU.hpp"
 
 #include <iomanip>
 #include <sstream>
+
+#pragma warning(disable:4244)
 
 namespace casioemu {
 	// clang-format off
@@ -332,12 +334,9 @@ namespace casioemu {
 
 		emulator.chipset.isMIBlocked = false;
 
+		auto pc_before = reg_csr << 16 | reg_pc;
+
 		while (1) {
-			InstructionEventArgs iea{};
-			RaiseEvent(on_instruction, *this, iea);
-			if (iea.should_break) {
-				emulator.SetPaused(true);
-			}
 
 			impl_opcode = Fetch();
 			OpcodeSource* handler = opcode_dispatch[impl_opcode];
@@ -383,6 +382,14 @@ namespace casioemu {
 			if (!(handler->hint & H_DS))
 				break;
 		}
+
+		InstructionEventArgs iea{};
+		iea.pc_before = pc_before;
+		iea.pc_after = reg_csr << 16 | reg_pc;
+		RaiseEvent(on_instruction, *this, iea);
+		if (iea.should_break) {
+			emulator.SetPaused(true);
+		}
 	}
 
 	void CPU::SetMemoryModel(MemoryModel _memory_model) {
@@ -398,7 +405,9 @@ namespace casioemu {
 		reg_dsr = 0;
 		reg_psw = 0;
 		fetch_addition = 2;
+#ifdef DBG
 		stack.get()->clear();
+#endif
 	}
 
 	void CPU::Raise(size_t exception_level, size_t index) {
@@ -427,6 +436,7 @@ namespace casioemu {
 	}
 
 	std::string CPU::GetBacktrace() const {
+#ifdef DBG
 		std::stringstream output;
 		output << std::hex << std::setfill('0') << std::uppercase;
 		auto stack = this->stack.get_const();
@@ -449,5 +459,8 @@ namespace casioemu {
 			output << '\n';
 		}
 		return output.str();
+#else
+		return "Disabled";
+#endif
 	}
 } // namespace casioemu

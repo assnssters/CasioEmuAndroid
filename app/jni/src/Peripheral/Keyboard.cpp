@@ -1,11 +1,12 @@
 ﻿#include "Keyboard.hpp"
 
-#include "../Chipset/Chipset.hpp"
-#include "../Chipset/MMU.hpp"
-#include "../Emulator.hpp"
-#include "../Logger.hpp"
-#include "../ModelInfo.h"
+#include "Chipset/Chipset.hpp"
+#include "Chipset/MMU.hpp"
+#include "Emulator.hpp"
+#include "Logger.hpp"
+#include "ModelInfo.h"
 
+#include <ML620Ports.h>
 #include <SDL.h>
 #include <chrono>
 #include <fstream>
@@ -39,6 +40,7 @@ namespace casioemu {
 			} type;
 			SDL_Rect rect;
 			uint8_t ko_bit, ki_bit;
+			uint8_t code;
 			bool pressed, stuck;
 		} buttons[64];
 
@@ -78,6 +80,18 @@ namespace casioemu {
 		real_hardware = emulator.modeldef.real_hardware;
 
 		clock_type = CLOCK_UNDEFINED;
+		if (emulator.hardware_id == HW_TI) {
+			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
+			if (!pp)
+				return;
+			pp->SetPortOutputCallback(3, [&](uint8_t new_output) {
+				keyboard_out = new_output;
+				RecalculateKI();
+			});
+			pp->SetPortInput(0, 0, 0x20);
+			pp->SetPortInput(4, 0, 0xff);
+			goto init_kbd;
+		}
 
 		region_ki.Setup(0xF040, 1, "Keyboard/KI", &keyboard_in, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 
@@ -90,20 +104,18 @@ namespace casioemu {
 			keyboard->RecalculateKI(); }, emulator);
 
 		region_input_filter.Setup(0xF042, 1, "Keyboard/InputFilter", &input_filter, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		if (emulator.hardware_id == HW_FX_5800P) { // TODO: label this as legacy ko?
+		if (emulator.hardware_id == HW_FX_5800P || emulator.modeldef.legacy_ko) {
 			region_ko.Setup(
 				0xF044, 1, "Keyboard/KO", this,
 				[](MMURegion* region, size_t offset) {
 					offset -= region->base;
 					Keyboard* keyboard = ((Keyboard*)region->userdata);
-					return (uint8_t)(keyboard->keyboard_out & 0xFF);
+					return (uint8_t)(keyboard->keyboard_out ^ 0xFF);
 				},
 				[](MMURegion* region, size_t offset, uint8_t data) {
-					offset -= region->base;
 					Keyboard* keyboard = ((Keyboard*)region->userdata);
 					keyboard->keyboard_out = 0xFF ^ data;
-					if (!offset)
-						keyboard->RecalculateKI();
+					keyboard->RecalculateKI();
 				},
 				emulator);
 		}
@@ -203,77 +215,103 @@ namespace casioemu {
 					return value;
 				},
 				MMURegion::IgnoreWrite, emulator);
-			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &keyboard_pd_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+		}
+		if (emulator.hardware_id == HW_CLASSWIZ_II) {
+			region_pd_emu.Setup(0xF058, 1, "Keyboard/PdValue", &emulator.modeldef.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+		}
+		else if (emulator.hardware_id == HW_ES_PLUS || emulator.hardware_id == HW_CLASSWIZ) {
+			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &emulator.modeldef.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 
-		{
-			for (auto& button : buttons)
-				button.type = Button::BT_NONE;
+	init_kbd: {
+		for (auto& button : buttons)
+			button = {};
 
-			for (auto& btn : emulator.modeldef.buttons) {
-				auto button_name = btn.keyname.c_str();
+		for (auto& btn : emulator.modeldef.buttons) {
+			auto button_name = btn.keyname.c_str();
 
-				SDL_Keycode button_key;
-				button_key = SDL_GetKeyFromName(button_name);
-				if (button_key == SDLK_UNKNOWN)
-					SDL_Log("[Keyboard] Warn: Key %x is being bind to a invalid or empty key '%s'\n", btn.kiko, button_name);
+			SDL_Keycode button_key;
+			button_key = SDL_GetKeyFromName(button_name);
+			if (button_key == SDLK_UNKNOWN)
+				printf("[Keyboard][Warn] Key %x is being bind to a invalid or empty key '%s'\n", btn.kiko, button_name);
 
-				uint8_t code = btn.kiko;
-				size_t button_ix;
-				if (code == 0xFF) {
-					button_ix = 63;
+			uint8_t code = btn.kiko;
+			size_t button_ix;
+			if (code == 0xFF) {
+				button_ix = 63;
+			}
+			else {
+				if (emulator.hardware_id == HW_TI) {
+					button_ix = btn.kiko;
 				}
 				else {
 					button_ix = ((code >> 1) & 0x38) | (code & 0x07);
-					if (button_ix >= 64)
-						PANIC("button index doesn't fit 6 bits\n");
 				}
+				if (button_ix >= 64)
+					PANIC("button index doesn't fit 6 bits\n");
+			}
 
-				if (button_key != SDLK_UNKNOWN) {
-					bool insert_success = keyboard_map.emplace(button_key, button_ix).second;
-					if (!insert_success)
-						SDL_Log("[Keyboard] Warn: Key '%s' is used twice for key %x\n", button_name, btn.kiko);
-				}
-				std::string bn2;
-				if (btn.keyname.starts_with("Keypad ")) {
-					if (btn.keyname == "Keypad Enter") {
-						bn2 = "Return";
-					}
-					else {
-						bn2 = btn.keyname.substr(7);
-					}
+			if (button_key != SDLK_UNKNOWN) {
+				bool insert_success = keyboard_map.emplace(button_key, button_ix).second;
+				if (!insert_success)
+					printf("[Keyboard][Warn] Key '%s' is used twice for key %x\n", button_name, btn.kiko);
+			}
+			std::string bn2;
+			if (btn.keyname.starts_with("Keypad ")) {
+				if (btn.keyname == "Keypad Enter") {
+					bn2 = "Return";
 				}
 				else {
-					if (btn.keyname == "Return") {
-						bn2 = "Keypad Enter";
-					}
-					else if (btn.keyname == "Backspace") {
-						bn2 = "Delete";
-					}
-					else if (btn.keyname == "Delete") {
-						bn2 = "Backspace";
-					}
-					else {
-						bn2 = "Keypad " + btn.keyname;
-					}
+					bn2 = btn.keyname.substr(7);
 				}
-				auto button_key_2 = SDL_GetKeyFromName(bn2.c_str());
-				if (button_key_2 != SDLK_UNKNOWN) {
-					bool insert_success = keyboard_map.emplace(button_key_2, button_ix).second;
+			}
+			else {
+				if (btn.keyname == "Return") {
+					bn2 = "Keypad Enter";
 				}
+				else if (btn.keyname == "enter") {
+					bn2 = "Return";
+				}
+				else if (btn.keyname == "Backspace") {
+					bn2 = "Delete";
+				}
+				else if (btn.keyname == "Delete") {
+					bn2 = "Backspace";
+				}
+				else {
+					bn2 = "Keypad " + btn.keyname;
+				}
+			}
+			auto button_key_2 = SDL_GetKeyFromName(bn2.c_str());
+			if (button_key_2 != SDLK_UNKNOWN) {
+				bool insert_success = keyboard_map.emplace(button_key_2, button_ix).second;
+			}
 
-				Button& button = buttons[button_ix];
-				button = {};
+			Button& button = buttons[button_ix];
+			button = {};
 
-				if (code == 0xFF)
-					button.type = Button::BT_POWER;
-				else
-					button.type = Button::BT_BUTTON;
-				button.rect = btn.rect;
+			if (code == 0xFF)
+				button.type = Button::BT_POWER;
+			else
+				button.type = Button::BT_BUTTON;
+			button.rect = btn.rect;
+			if (emulator.hardware_id == HW_TI) {
+				int kimap[] = {7, 0, 1, 2, 3, 4, 5, 6};
+				auto ki = kimap[btn.kiko & 7];
+				auto ko = (btn.kiko >> 3);
+				if (ki == 7 && ko > 0) {
+					ko -= 1;
+				}
+				button.ki_bit = 1 << ki;
+				button.ko_bit = 1 << ko;
+				button.code = btn.kiko;
+			}
+			else {
 				button.ko_bit = 1 << ((code >> 4) & 0xF);
 				button.ki_bit = 1 << (code & 0xF);
 			}
 		}
+	}
 	}
 
 	void Keyboard::Reset() {
@@ -297,17 +335,18 @@ namespace casioemu {
 	}
 
 	void Keyboard::Tick() {
-		if (factory_test) {
-			keyboard_in = (uint8_t)~0b00011000;
+		if (emulator.modeldef.hardware_id == HW_TI) {
 			return;
 		}
-
+		if (factory_test) {
+			keyboard_in = (uint8_t)~0b00011000; // KI 3 KI 4 enabled xD
+			return;
+		}
 		if (!real_hardware) {
 			if (keyboard_ready_emu > 1)
 				emulator.chipset.MaskableInterrupts[EXI0INT].TryRaise();
 			return;
 		}
-
 		switch (emulator.chipset.data_EXICON & 0x03) {
 		case 0:
 			input_filter_last &= input_filter;
@@ -342,6 +381,10 @@ namespace casioemu {
 					SDL_SetRenderDrawColor(renderer, 127, 0, 0, 127);
 				else
 					SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
+				SDL_RenderFillRect(renderer, &button.rect);
+			}
+			else {
+				SDL_SetRenderDrawColor(renderer, 0, 0, 0, 40);
 				SDL_RenderFillRect(renderer, &button.rect);
 			}
 		}
@@ -379,10 +422,16 @@ namespace casioemu {
 		case SDL_KEYUP:
 			SDL_Keycode keycode = event.key.keysym.sym;
 			auto iterator = keyboard_map.find(keycode);
-			SDL_Log("Key: %x(%s)\n", keycode, SDL_GetKeyName(keycode));
+			printf("[Keyboard][Info] SDL_Keycode: %x(%s)\n", keycode, SDL_GetKeyName(keycode));
 			if (event.key.keysym.sym == SDLK_F11 && event.key.state) {
+				if (event.key.keysym.mod & KMOD_LCTRL) {
+					emulator.chipset.Reset();
+					return;
+				}
 				factory_test = !factory_test;
-				SDL_Log("Factory test status: %d\n", factory_test);
+				emulator.chipset.tiDiagMode = factory_test;
+				emulator.chipset.tiKey = 0xfe;
+				printf("Factory test/Ti Diag status: %d\n", factory_test);
 				return;
 			}
 			if (iterator == keyboard_map.end())
@@ -411,17 +460,23 @@ namespace casioemu {
 			if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03))
 				emulator.chipset.Reset();
 			else {
-				SDL_Log("RESETB is BLOCKED.Press Ctrl+F11 to reset.\n");
+				printf("[Keyboard][Info] RESETB is BLOCKED.Press Ctrl+F11 to reset.\n");
 			}
 		}
-		if (button.pressed && button.type == Button::BT_BUTTON) {
-			SDL_Log("ki: %d,ko: %d\n", (int)(log(button.ki_bit) / log(2)), (int)(log(button.ko_bit) / log(2)));
-
-            SDL_Log("Vibrated.");
-            Vibration::vibrate(50);
+		if (button.type == Button::BT_BUTTON) {
+			if (emulator.hardware_id == HW_TI) {
+				// emulator.chipset.MaskableInterrupts[EXI0INT].TryRaise();
+				printf("[Keyboard][Info] Keycode: 0x%x\n", button.code);
+				// if (!emulator.chipset.GetRunningState() && button.code == 0x29) {
+				//	emulator.chipset.Reset();
+				// }
+				emulator.chipset.tiKey = button.code;
+			}
+			printf("[Keyboard][Info] KI: %d, KO: %d\n", (int)(log(button.ki_bit) / log(2)), (int)(log(button.ko_bit) / log(2)));
 		}
 
 		if (button.type == Button::BT_BUTTON) {
+			Vibration::vibrate(100);
 			if (real_hardware) {
 				RecalculateGhost();
 			}
@@ -461,7 +516,7 @@ namespace casioemu {
 				PressButton(buttons[button_index], false);
 			}
 			else {
-				logger::Info("Invalid button code 0x%02X!\n", code);
+				printf("[Keyboard][Info] Invalid button code 0x%02X!\n", code);
 			}
 		}
 	}
@@ -548,7 +603,26 @@ namespace casioemu {
 	}
 
 	void Keyboard::RecalculateKI() {
-		if (emulator.hardware_id == HW_FX_5800P) { // TODO: label this as legacy ko?
+		if (emulator.hardware_id == HW_TI) {
+			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
+			if (!pp) // No port provider :(
+				return;
+			auto is_on_pressed = false;
+			keyboard_in = 0;
+			for (auto& button : buttons) {
+				if (button.code == 0x29) { // right, [ON] is a gpio button xd
+					if (button.pressed)
+						is_on_pressed = true;
+					continue;
+				}
+				if (button.type == Button::BT_BUTTON && button.pressed && button.ko_bit & keyboard_out)
+					keyboard_in |= button.ki_bit;
+			}
+			pp->SetPortInput(0, is_on_pressed ? 0x20 : 0, 0x20);
+			pp->SetPortInput(4, keyboard_in, 0xff);
+			return;
+		}
+		if (emulator.hardware_id == HW_FX_5800P || emulator.modeldef.legacy_ko) { // TODO: label this as legacy ko?
 			keyboard_in = 0xFF;
 			for (auto& button : buttons)
 				if (button.type == Button::BT_BUTTON && button.pressed && button.ko_bit & keyboard_out)
@@ -573,13 +647,14 @@ namespace casioemu {
 		for (auto& button : buttons)
 			if (button.type == Button::BT_BUTTON && button.pressed && button.ki_bit & input_mode & ki_pulled_up)
 				keyboard_in |= button.ki_bit;
-
-		if (keyboard_out & ~keyboard_out_mask & (1 << 7) && p0)
-			keyboard_in &= 0x7F;
-		if (keyboard_out & ~keyboard_out_mask & (1 << 8) && p1)
-			keyboard_in &= 0x7F;
-		if (keyboard_out & ~keyboard_out_mask & (1 << 9) && p146)
-			keyboard_in &= 0x7F;
+		if (emulator.hardware_id != HW_TI) {
+			if (keyboard_out & ~keyboard_out_mask & (1 << 7) && p0)
+				keyboard_in &= 0x7F;
+			if (keyboard_out & ~keyboard_out_mask & (1 << 8) && p1)
+				keyboard_in &= 0x7F;
+			if (keyboard_out & ~keyboard_out_mask & (1 << 9) && p146)
+				keyboard_in &= 0x7F;
+		}
 	}
 
 	void Keyboard::ReleaseAll() {
@@ -592,6 +667,7 @@ namespace casioemu {
 					had_effect = true;
 			}
 		}
+
 		if (had_effect) {
 			if (real_hardware)
 				RecalculateGhost();

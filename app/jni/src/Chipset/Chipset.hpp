@@ -1,11 +1,11 @@
 ﻿#pragma once
-#include "../Config.hpp"
+#include "Config.hpp"
 
 #include "InterruptSource.hpp"
 #include "MMURegion.hpp"
 
-#include "../Peripheral/ExternalInterrupts.hpp"
-#include "../Peripheral/IOPorts.hpp"
+#include "Peripheral/ExternalInterrupts.hpp"
+#include "Peripheral/IOPorts.hpp"
 
 #include <SDL.h>
 #include <forward_list>
@@ -30,6 +30,7 @@ namespace casioemu {
 			INT_COUNT = 128
 		};
 
+	public:
 		enum RunMode {
 			RM_STOP,
 			RM_HALT,
@@ -37,6 +38,7 @@ namespace casioemu {
 		};
 		RunMode run_mode;
 
+	private:
 		std::forward_list<Peripheral*> peripherals;
 
 		/**
@@ -59,18 +61,20 @@ namespace casioemu {
 		void ResetInterruptSFR();
 		void DestructInterruptSFR();
 		MMURegion region_int_mask, region_int_pending;
-		uint32_t data_int_mask, data_int_pending;
+		uint64_t data_int_mask, data_int_pending;
 		static const size_t managed_interrupt_base = 4;
 
 		MMURegion region_BLKCON;
 
-		MMURegion region_FCON, region_LTBR, region_HTBR, region_LTBADJ;
+		MMURegion region_FCON, region_FCON1, region_LTBR, region_HTBR, region_LTBADJ;
 		int LSCLKFreq{};
 
 		long long LSCLKTickCounter{}, HSCLKTickCounter, HSCLKTimeCounter, SYSCLKTickCounter, LSCLKTimeCounter, LSCLKThresh;
 		int LSCLKFreqAddition{};
 
 		bool real_hardware;
+
+		void* QueryInterface(const char* name);
 
 	public:
 		Chipset(Emulator& emulator);
@@ -98,7 +102,7 @@ namespace casioemu {
 		uint8_t data_BLKCON, BLKCON_mask;
 		uint8_t data_EXICON;
 
-		uint8_t data_FCON, data_LTBR, data_HTBR;
+		uint8_t data_FCON, data_FCON1, data_LTBR, data_HTBR;
 		uint16_t data_LTBADJ;
 
 		// 0.5Hz-64Hz Low Speed Clock output.Corresponding bit is set to 1 on output and got reset on the next LSCLK tick.
@@ -130,6 +134,10 @@ namespace casioemu {
 
 		bool isMIBlocked;
 
+		// TI things.
+		bool tiDiagMode;
+		int tiKey;
+
 		/**
 		 * This exists because the Emulator that owns this Chipset is not ready
 		 * to supply a ROM path upon construction. It has to call `LoadROM` later
@@ -160,6 +168,14 @@ namespace casioemu {
 		void EmulatorTick();
 		void Frame();
 		void UIEvent(SDL_Event& event);
+
+		template <typename T>
+		T* QueryInterface() {
+			auto i = this->QueryInterface(typeid(T).name());
+			if (i)
+				return (T*)i;
+			return nullptr;
+		}
 
 		friend class CPU;
 	};

@@ -1,19 +1,32 @@
 ﻿#include "5800Flash.h"
-#include "../Chipset/MMU.hpp"
-#include "../Chipset/Chipset.hpp"
-#include "../Emulator.hpp"
+#include "Chipset/MMU.hpp"
+#include "Chipset/Chipset.hpp"
+#include "Emulator.hpp"
+#include <fstream>
+#include <cstring>
+
 namespace casioemu {
+
+	constexpr const char* FLASH_SAVE_PATH = "flash.dmp";
+	constexpr uint32_t SAVE_INTERVAL_MS = 10 * 1000; // 10s
 	class Flash2 : public casioemu::Peripheral {
 	public:
 		MMURegion flash;
 		int flash_mode = 0;
-		Flash2(Emulator& emu) : casioemu::Peripheral(emu) {
+
+		// 定时器回调函数
+		static Uint32 SaveRamCallback(Uint32 interval, void* param) {
+			static_cast<Flash2*>(param)->SaveFlashData();
+			return interval; // 继续触发定时器
 		}
+		Flash2(Emulator& emu) : casioemu::Peripheral(emu) {}
+
 		void Initialise() override {
+			LoadFlashData();
 			flash.Setup(
 				0x80000, 0x80000, "Flash/Fx5800PFlash", this,
 				[](MMURegion* region, size_t offset) -> uint8_t {
-					auto flash = ((Flash2*)region->userdata);
+					auto flash = static_cast<Flash2*>(region->userdata);
 					auto fo = offset & 0x7ffff;
 					if (flash->flash_mode == 6) {
 						flash->flash_mode = 0;
@@ -22,7 +35,7 @@ namespace casioemu {
 					return flash->emulator.chipset.flash_data[fo];
 				},
 				[](MMURegion* region, size_t offset, uint8_t data) {
-					auto flash = ((Flash2*)region->userdata);
+					auto flash = static_cast<Flash2*>(region->userdata);
 					auto fo = offset & 0x7ffff;
 					switch (flash->flash_mode) {
 					case 0:
@@ -48,7 +61,6 @@ namespace casioemu {
 						}
 						break;
 					case 3:
-						printf("Program %x to %x\n", (int)fo, data);
 						flash->emulator.chipset.flash_data[fo] = data;
 						flash->flash_mode = 0;
 						return;
@@ -64,12 +76,11 @@ namespace casioemu {
 							return;
 						}
 						break;
-					case 6: // we dont know sector's mapping(?)
+					case 6:
 						if (fo == 0)
 							memset(&flash->emulator.chipset.flash_data[fo], 0xff, 0x7fff);
 						if (fo == 0x20000 || fo == 0x30000)
 							memset(&flash->emulator.chipset.flash_data[fo], 0xff, 0xffff);
-						printf("Erase %x (%x)\n", (int)fo, data);
 						return;
 					case 7:
 						if (fo == 0xaaa && data == 0xaa) {
@@ -79,24 +90,45 @@ namespace casioemu {
 						break;
 					}
 					if (data == 0xf0) {
-						printf("Reset mode.\n");
 						flash->flash_mode = 0;
 						return;
 					}
-					//if (data == 0xb0) {
-					//	printf("Erase Suspend.\n");
-					//	return;
-					//}
-					//if (data == 0x30) {
-					//	printf("Erase Suspend.\n");
-					//	return;
-					//}
-					printf("Unknown jedec %05x = %02x\n", (int)fo, data);
+					printf("[Flash][Warn] Unknown command: %05x = %02x\n", static_cast<int>(fo), data);
 				},
 				emulator);
+
+					SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
+		}
+
+		void Uninitialise() override {
+			SaveFlashData();
+		}
+
+		void SaveFlashData() {
+			std::ofstream out_file(emulator.GetModelFilePath(FLASH_SAVE_PATH), std::ios::binary);
+			if (out_file) {
+				out_file.write((char*)emulator.chipset.flash_data.data(), 0x80000);
+				logger::Info("[Flash2] Flash data saved to flash.dmp\n");
+			}
+			else {
+				logger::Info("[Flash2] Failed to save flash data to flash.dmp\n");
+			}
+		}
+
+		void LoadFlashData() {
+			std::ifstream in_file(emulator.GetModelFilePath(FLASH_SAVE_PATH), std::ios::binary);
+			if (in_file) {
+				in_file.read((char*)emulator.chipset.flash_data.data(), 0x80000);
+				logger::Info("[Flash2] Flash data loaded from flash.dmp\n");
+			}
+			else {
+				logger::Info("[Flash2] Using default flash data\n");
+			}
 		}
 	};
+
 	Peripheral* CreateFx5800Flash(Emulator& emu) {
 		return new Flash2(emu);
 	}
+
 } // namespace casioemu

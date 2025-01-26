@@ -1,5 +1,5 @@
-#pragma once
-#include "../Chipset/Chipset.hpp"
+﻿#pragma once
+#include "Chipset/Chipset.hpp"
 #include <functional>
 
 // this is the new cpp style hook library
@@ -19,6 +19,8 @@ struct InterruptEventArgs {
 	bool handled{};
 };
 struct InstructionEventArgs {
+	uint32_t pc_before;
+	uint32_t pc_after;
 	bool should_break{};
 };
 

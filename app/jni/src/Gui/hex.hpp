@@ -55,7 +55,7 @@
 #include <string>
 #include <vector>
 
-#include "../config.hpp"
+#include "Config.hpp"
 
 #ifdef _MSC_VER
 #define _PRISizeT "I"
@@ -95,6 +95,8 @@ struct MemoryEditor {
 	ImU8 (*ReadFn)(const ImU8* data, size_t off);	   // = 0      // optional handler to read bytes.
 	void (*WriteFn)(ImU8* data, size_t off, ImU8 d);   // = 0      // optional handler to write bytes.
 	bool (*HighlightFn)(const ImU8* data, size_t off); //= 0      // optional handler to return Highlight property (to support non-contiguous highlighting).
+	void* contextmenuuserdata = 0;
+	void (*ContextMenuFn)(void* userdata, size_t off){};
 
 	// [Internal State]
 	bool ContentsWidthChanged;
@@ -107,12 +109,17 @@ struct MemoryEditor {
 	size_t HighlightMin, HighlightMax;
 	int PreviewEndianess;
 	ImGuiDataType PreviewDataType;
+	float* ram_edit_ov = 0;
 
 	MemoryEditor() {
 		// Settings
 		Open = true;
 		ReadOnly = false;
+#ifdef __ANDROID__
 		Cols = 8;
+#else
+		Cols = 16;
+#endif
 		OptShowOptions = true;
 		OptShowDataPreview = false;
 		OptShowHexII = false;
@@ -192,7 +199,7 @@ struct MemoryEditor {
 
 		// We begin into our scrolling region with the 'ImGuiWindowFlags_NoMove' in order to prevent click from moving the window.
 		// This is used as a facility since our main click detection code doesn't assign an ActiveId so the click would normally be caught as a window-move.
-		const float height_separator = style.ItemSpacing.y;
+		const float height_separator = style.ItemSpacing.y + style.ItemInnerSpacing.y;
 		float footer_height = OptFooterExtraHeight;
 		if (OptShowOptions)
 			footer_height += height_separator + ImGui::GetFrameHeightWithSpacing() * 1;
@@ -276,7 +283,6 @@ struct MemoryEditor {
 						}
 						draw_list->AddRectFilled(pos, ImVec2(pos.x + highlight_width, pos.y + s.LineHeight), HighlightColor);
 					}
-
 					if (DataEditingAddr == addr) {
 						// Display text input on current byte
 						bool data_write = false;
@@ -350,9 +356,15 @@ struct MemoryEditor {
 							else
 								ImGui::Text(format_byte_space, b);
 						}
-						if (!ReadOnly && ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
-							DataEditingTakeFocus = true;
-							data_editing_addr_next = addr;
+						if (ImGui::IsItemHovered()) {
+							if (ImGui::IsMouseClicked(0)) {
+								DataEditingTakeFocus = !ReadOnly;
+								data_editing_addr_next = addr;
+							}
+							if (ImGui::IsItemClicked(1)) {
+								if (ContextMenuFn)
+									ContextMenuFn(contextmenuuserdata, addr + base_display_addr);
+							}
 						}
 					}
 				}
@@ -412,7 +424,7 @@ struct MemoryEditor {
 		size_t length{};
 		ImColor color{};
 		const char* desc{};
-		bool operator<(const MarkedSpan& b)const  {
+		bool operator<(const MarkedSpan& b) const {
 			return start < b.start;
 		}
 	};
@@ -609,6 +621,18 @@ struct MemoryEditor {
 						}
 						draw_list->AddRectFilled(pos, ImVec2(pos.x + highlight_width, pos.y + s.LineHeight), HighlightColor);
 					}
+					if (ram_edit_ov && ram_edit_ov[(size_t)mem_data + addr] > 0) {
+						ImVec2 pos = ImGui::GetCursorScreenPos();
+						float highlight_width = s.GlyphWidth * 2;
+						bool is_next_byte_highlighted = (addr + 1 < mem_size) && ((HighlightMax != (size_t)-1 && addr + 1 < HighlightMax) || (HighlightFn && HighlightFn(mem_data, addr + 1)));
+						if (is_next_byte_highlighted || (n + 1 == Cols)) {
+							highlight_width = s.HexCellWidth;
+							if (OptMidColsCount > 0 && n > 0 && (n + 1) < Cols && ((n + 1) % OptMidColsCount) == 0)
+								highlight_width += s.SpacingBetweenMidCols;
+						}
+						draw_list->AddRectFilled(pos, ImVec2(pos.x + highlight_width, pos.y + s.LineHeight), IM_COL32(255, 0, 0, int(ram_edit_ov[(size_t)mem_data + addr])));
+						ram_edit_ov[(size_t)mem_data + addr] -= 10;
+					}
 
 					if (DataEditingAddr == addr) {
 						// Display text input on current byte
@@ -663,7 +687,7 @@ struct MemoryEditor {
 								if (buf[i * 2] == '\0' || buf[i * 2 + 1] == '\0')
 									break;
 								char byte_buf[3] = {buf[i * 2], buf[i * 2 + 1]};
-								uint8_t input_value = strtoul(byte_buf, nullptr, 16);
+								uint8_t input_value = static_cast<uint8_t>(strtoul(byte_buf, nullptr, 16));
 								if (WriteFn) {
 									WriteFn(mem_data, addr + i, input_value);
 								}
@@ -694,9 +718,15 @@ struct MemoryEditor {
 							else
 								ImGui::Text(format_byte_space, b);
 						}
-						if (!ReadOnly && ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
-							DataEditingTakeFocus = true;
-							data_editing_addr_next = addr;
+						if (ImGui::IsItemHovered()) {
+							if (ImGui::IsMouseClicked(0)) {
+								DataEditingTakeFocus = !ReadOnly;
+								data_editing_addr_next = addr;
+							}
+							if (ImGui::IsItemClicked(1)) {
+								if (ContextMenuFn)
+									ContextMenuFn(contextmenuuserdata, addr + base_display_addr);
+							}
 						}
 					}
 				}

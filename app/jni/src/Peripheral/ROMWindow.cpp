@@ -1,10 +1,10 @@
 ﻿#include "ROMWindow.hpp"
 
-#include "../Chipset/Chipset.hpp"
-#include "../Chipset/MMU.hpp"
-#include "../Emulator.hpp"
-#include "../Logger.hpp"
-#include "../ModelInfo.h"
+#include "Chipset/Chipset.hpp"
+#include "Chipset/MMU.hpp"
+#include "Emulator.hpp"
+#include "Logger.hpp"
+#include "ModelInfo.h"
 
 #include <string>
 
@@ -24,11 +24,11 @@ namespace casioemu {
 			description = "ROM/Segment" + std::to_string(region_base >> 16);
 
 		MMURegion::WriteFunction write_function = strict_memory ? [](MMURegion* region, size_t address, uint8_t data) {
-			logger::Info("ROM::[region write lambda]: attempt to write %02hhX to %06zX\n", data, address);
+			// logger::Info("ROM::[region write lambda]: attempt to write %02hhX to %06zX\n", data, address);
 			region->emulator->HandleMemoryError();
 		}
 																: [](MMURegion* region, size_t address, uint8_t data) {
-																	  printf("ROM::[region write lambda]: attempt to write %02hhX to %06zX\n", data, address);
+																	  // printf("ROM::[region write lambda]: attempt to write %02hhX to %06zX\n", data, address);
 																  };
 
 		if (offset >= 0)
@@ -66,6 +66,8 @@ namespace casioemu {
 			SetupROMRegion(regions[3], 0x30000, 0x10000, 0x30000, strict_memory, emulator);
 			SetupROMRegion(regions[4], 0x50000, 0x10000, 0x00000, strict_memory, emulator);
 			break;
+
+		case HW_TI:
 		case HW_CLASSWIZ_II:
 			regions.reset(new MMURegion[16]);
 			emulator.chipset.rom_data.resize(0x60000, 0);
@@ -101,6 +103,10 @@ namespace casioemu {
 			emulator.chipset.rom_data.resize(0x20000, 0);
 			SetupROMRegion(regions[0], 0x00000, 0x8000, 0x00000, strict_memory, emulator);
 			SetupROMRegion(regions[1], 0x10000, 0x10000, 0x10000, strict_memory, emulator);
+			break;
+		default:
+			PANIC("Unknown Model type");
+			break;
 		}
 	}
 	Peripheral* CreateRomWindow(Emulator& emu) {

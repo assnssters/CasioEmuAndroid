@@ -1,9 +1,9 @@
 ﻿#include "StandbyControl.hpp"
 
-#include "../Chipset/Chipset.hpp"
-#include "../Chipset/MMU.hpp"
-#include "../Emulator.hpp"
-#include "../Logger.hpp"
+#include "Chipset/Chipset.hpp"
+#include "Chipset/MMU.hpp"
+#include "Emulator.hpp"
+#include "Logger.hpp"
 
 namespace casioemu {
 	class StandbyControl : public Peripheral {
@@ -40,6 +40,16 @@ namespace casioemu {
 					self->stop_acceptor_enabled = false;
 					self->emulator.chipset.Stop();
 					return;
+				}
+				if (self->emulator.hardware_id == HW_TI) { // TODO: DEEP_HALT
+					if (data & 0x04) {
+						self->emulator.chipset.Halt();
+						return;
+					}
+					if (data & 0x08) {
+						self->emulator.chipset.Halt();
+						return;
+					}
 				}
 			},
 			emulator);

@@ -1,9 +1,9 @@
 ﻿#include "RealTimeClock.hpp"
 
-#include "../Chipset/Chipset.hpp"
-#include "../Chipset/MMU.hpp"
-#include "../Emulator.hpp"
-#include "../Logger.hpp"
+#include "Chipset/Chipset.hpp"
+#include "Chipset/MMU.hpp"
+#include "Emulator.hpp"
+#include "Logger.hpp"
 
 namespace casioemu {
 	class RealTimeClock : public Peripheral {
@@ -238,7 +238,7 @@ namespace casioemu {
 	}
 
 	void RealTimeClock::Reset() {
-		RTCCON = 0;
+		// RTCCON = 0;
 	}
 	Peripheral* CreateRtc(Emulator& emu) {
 		return new RealTimeClock(emu);

@@ -1,8 +1,10 @@
 ﻿#include "CPU.hpp"
 
-#include "../Emulator.hpp"
+#include "Emulator.hpp"
 #include "Chipset.hpp"
 #include "MMU.hpp"
+
+#pragma warning(disable : 4244)
 
 namespace casioemu
 {

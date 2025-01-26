@@ -1,10 +1,13 @@
 ﻿#include "CPU.hpp"
 
-#include "../Emulator.hpp"
-#include "../Gui/Hooks.h"
-#include "../Gui/ui.hpp"
 #include "Chipset.hpp"
+#include "Emulator.hpp"
+#include "Gui/Hooks.h"
+#include "Ui.hpp"
 #include "MMU.hpp"
+
+#pragma warning(disable : 4244)
+
 namespace casioemu {
 	// * Control Register Access Instructions
 	void CPU::OP_ADDSP() {
@@ -206,26 +209,42 @@ namespace casioemu {
 	}
 
 	void CPU::OP_BL() {
+#ifdef DBG
 		auto stack = this->stack.get();
+#endif
 		reg_lr = reg_pc;
 		reg_lcsr = reg_csr;
-		if (!stack->empty() && !stack->back().lr_pushed) {}
+		// if (!stack->empty() && !stack->back().lr_pushed) {}
 		OP_B();
+#ifdef DBG
 		StackFrame sf{};
+		sf.er0 = reg_r[0] | (reg_r[1] << 8);
+		sf.er2 = reg_r[2] | (reg_r[3] << 8);
+		sf.sp = reg_sp;
 		sf.new_pc = reg_csr << 16 | reg_pc;
+		if (!stack->empty() && !stack->back().lr_pushed) {
+			std::cout << "[CPU][Warn] Lr get override.(BL after lr not backuped)\n";
+			stack->back().lr = 0xffffff;
+			stack->back().lr_push_address = 0;
+			stack->back().lr_pushed = true;
+			// stack->clear();
+		}
 		stack->push_back(sf);
 		if (on_call_function)
 			on_call_function(*this, {sf.new_pc, (uint32_t)(reg_lcsr << 16 | reg_lr)});
+#endif
 	}
 
 	// * Miscellaneous Instructions
 	void CPU::OP_RT() {
+#ifdef DBG
 		auto stack = this->stack.get();
 		if (stack->empty()) {}
 		else {
 			if (stack->back().lr_pushed) {}
 			stack->pop_back();
 		}
+#endif
 		reg_csr = reg_lcsr;
 		reg_pc = reg_lr;
 	}
