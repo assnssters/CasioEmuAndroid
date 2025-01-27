@@ -1,4 +1,3 @@
-// UIScaling.cpp
 #include "UIScaling.h"
 
 namespace UI {

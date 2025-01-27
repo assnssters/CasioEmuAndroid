@@ -212,7 +212,7 @@ namespace casioemu {
 			}
 
 #ifdef  __ANDROID__
-            ratio = 0.80;
+            ratio = 1 - 8e-2;
 #endif
 
 			if (screen_refresh_rate < screen_flashing_threshold && !enable_screen_fading)

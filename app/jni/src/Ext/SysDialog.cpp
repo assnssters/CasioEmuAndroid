@@ -76,110 +76,79 @@ std::filesystem::path SystemDialogs::SaveFolderDialog() {
 #include <jni.h>
 #include <SDL.h>
 #include <filesystem>
+#include <thread>
+#include <chrono>
 
-// Implement the C++ methods
+std::filesystem::path WaitForResult(JNIEnv* env, jobject activity) {
+    // Wait for result with timeout
+    for(int i = 0; i < 100; i++) { // Wait up to 10 seconds
+        jclass gameCls = env->FindClass("com/tele/u8emulator/Game");
+        jmethodID getLastPath = env->GetStaticMethodID(gameCls, "getLastSelectedPath", "()Ljava/lang/String;");
+        jstring result = (jstring)env->CallStaticObjectMethod(gameCls, getLastPath);
+        
+        if(result != nullptr) {
+            const char *path = env->GetStringUTFChars(result, nullptr);
+            std::string pathStr = path;
+            env->ReleaseStringUTFChars(result, path);
+            
+            if(!pathStr.empty()) {
+                return std::filesystem::path(pathStr);
+            }
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    return {};
+}
+
 std::filesystem::path SystemDialogs::OpenFileDialog() {
     auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
     jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
     jmethodID openFileDialogMethod = env->GetStaticMethodID(cls, "openFileDialog",
                                                       "(Landroid/app/Activity;)Ljava/lang/String;");
-    jmethodID saveFileDialogMethod = env->GetStaticMethodID(cls, "saveFileDialog",
-                                                      "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;");
-    jmethodID openFolderDialogMethod = env->GetStaticMethodID(cls, "openFolderDialog",
-                                                        "(Landroid/app/Activity;)Ljava/lang/String;");
-    jmethodID saveFolderDialogMethod = env->GetStaticMethodID(cls, "saveFolderDialog",
-                                                        "(Landroid/app/Activity;)Ljava/lang/String;");
-    // Get the current activity from the SDL Android backend
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    // Call the Java method
-    jstring result = (jstring) env->CallStaticObjectMethod(cls, openFileDialogMethod, activity);
-
-    // Convert the Java string to a C++ string
-    const char *path = env->GetStringUTFChars(result, nullptr);
-    std::string pathStr = path;
-    env->ReleaseStringUTFChars(result, path);
-
-    return std::filesystem::path(pathStr);
+    
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    env->CallStaticObjectMethod(cls, openFileDialogMethod, activity);
+    
+    return WaitForResult(env, activity);
 }
 
-std::filesystem::path SystemDialogs::SaveFileDialog(std::string preferredName) {
+std::filesystem::path SystemDialogs::SaveFileDialog(std::string prefered_name) {
     auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
     jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
-    jmethodID openFileDialogMethod = env->GetStaticMethodID(cls, "openFileDialog",
-                                                            "(Landroid/app/Activity;)Ljava/lang/String;");
     jmethodID saveFileDialogMethod = env->GetStaticMethodID(cls, "saveFileDialog",
-                                                            "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;");
-    jmethodID openFolderDialogMethod = env->GetStaticMethodID(cls, "openFolderDialog",
-                                                              "(Landroid/app/Activity;)Ljava/lang/String;");
-    jmethodID saveFolderDialogMethod = env->GetStaticMethodID(cls, "saveFolderDialog",
-                                                              "(Landroid/app/Activity;)Ljava/lang/String;");
-    // Get the current activity from the SDL Android backend
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    // Create a Java string for the preferred name
-    jstring preferredNameStr = env->NewStringUTF(preferredName.c_str());
-
-    // Call the Java method
-    jstring result = (jstring) env->CallStaticObjectMethod(cls, saveFileDialogMethod, activity,
-                                                     preferredNameStr);
-
-    // Convert the Java string to a C++ string
-    const char *path = env->GetStringUTFChars(result, nullptr);
-    std::string pathStr = path;
-    env->ReleaseStringUTFChars(result, path);
-
-    return std::filesystem::path(pathStr);
+                                                      "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;");
+    
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    jstring jPreferedName = env->NewStringUTF(prefered_name.c_str());
+    env->CallStaticObjectMethod(cls, saveFileDialogMethod, activity, jPreferedName);
+    env->DeleteLocalRef(jPreferedName);
+    
+    return WaitForResult(env, activity);
 }
 
 std::filesystem::path SystemDialogs::OpenFolderDialog() {
     auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
     jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
-    jmethodID openFileDialogMethod = env->GetStaticMethodID(cls, "openFileDialog",
-                                                            "(Landroid/app/Activity;)Ljava/lang/String;");
-    jmethodID saveFileDialogMethod = env->GetStaticMethodID(cls, "saveFileDialog",
-                                                            "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;");
     jmethodID openFolderDialogMethod = env->GetStaticMethodID(cls, "openFolderDialog",
-                                                              "(Landroid/app/Activity;)Ljava/lang/String;");
-    jmethodID saveFolderDialogMethod = env->GetStaticMethodID(cls, "saveFolderDialog",
-                                                              "(Landroid/app/Activity;)Ljava/lang/String;");
-    // Get the current activity from the SDL Android backend
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    // Call the Java method
-    jstring result = (jstring) env->CallStaticObjectMethod(cls, openFolderDialogMethod, activity);
-
-    // Convert the Java string to a C++ string
-    const char *path = env->GetStringUTFChars(result, nullptr);
-    std::string pathStr = path;
-    env->ReleaseStringUTFChars(result, path);
-
-    return std::filesystem::path(pathStr);
+                                                        "(Landroid/app/Activity;)Ljava/lang/String;");
+    
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    env->CallStaticObjectMethod(cls, openFolderDialogMethod, activity);
+    
+    return WaitForResult(env, activity);
 }
 
 std::filesystem::path SystemDialogs::SaveFolderDialog() {
     auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
     jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
-    jmethodID openFileDialogMethod = env->GetStaticMethodID(cls, "openFileDialog",
-                                                            "(Landroid/app/Activity;)Ljava/lang/String;");
-    jmethodID saveFileDialogMethod = env->GetStaticMethodID(cls, "saveFileDialog",
-                                                            "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;");
-    jmethodID openFolderDialogMethod = env->GetStaticMethodID(cls, "openFolderDialog",
-                                                              "(Landroid/app/Activity;)Ljava/lang/String;");
     jmethodID saveFolderDialogMethod = env->GetStaticMethodID(cls, "saveFolderDialog",
-                                                              "(Landroid/app/Activity;)Ljava/lang/String;");
-    // Get the current activity from the SDL Android backend
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    // Call the Java method
-    jstring result = (jstring) env->CallStaticObjectMethod(cls, saveFolderDialogMethod, activity);
-
-    // Convert the Java string to a C++ string
-    const char *path = env->GetStringUTFChars(result, nullptr);
-    std::string pathStr = path;
-    env->ReleaseStringUTFChars(result, path);
-
-    return std::filesystem::path(pathStr);
+                                                        "(Landroid/app/Activity;)Ljava/lang/String;");
+    
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    env->CallStaticObjectMethod(cls, saveFolderDialogMethod, activity);
+    
+    return WaitForResult(env, activity);
 }
 
 #elif defined(__linux__)

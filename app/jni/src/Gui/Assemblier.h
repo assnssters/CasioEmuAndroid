@@ -1,3 +1,3 @@
 ﻿#pragma once
 
-UIWindow* MakeAssemblerUI();
+UIWindow* MakeAssemblierUI();

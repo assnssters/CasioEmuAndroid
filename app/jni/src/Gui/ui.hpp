@@ -3,6 +3,8 @@
 #include "Emulator.hpp"
 #include "LabelFile.h"
 #include "imgui/imgui.h"
+#include "UIScaling.h"
+
 int test_gui(bool* guiCreated,SDL_Window*,SDL_Renderer*);
 void gui_cleanup();
 void gui_loop();
@@ -16,23 +18,30 @@ extern std::vector<Label> g_labels;
 void SetDebugbreak(void);
 class UIWindow {
 public:
-	UIWindow(const char* name) : name(name) {}
-	const char* name{};
-	bool open = true;
-	ImVec2 inital_size{800, 800};
-	ImGuiWindowFlags flags{};
-	virtual void Render() {
-		if (!open)
-			return;
-		ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
-		if (ImGui::Begin(name, &open, flags)) {
-			RenderCore();
-		}
-		ImGui::End();
-	}
-	virtual void RenderCore() = 0;
-	virtual ~UIWindow() {
-
-	}
+    UIWindow(const char* name) : name(name) {}
+    const char* name{};
+    bool open = true;
+    ImVec2 inital_size{800, 800};
+    ImGuiWindowFlags flags{};
+    virtual void Render() {
+        if (!open)
+            return;
+        #ifdef __ANDROID__
+        ImVec2 scaled_size = ImVec2(
+            inital_size.x * UI::Scaling::fontScale,
+            inital_size.y * UI::Scaling::fontScale
+        );
+        ImGui::SetNextWindowSize(scaled_size, ImGuiCond_FirstUseEver);
+        #else
+        ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
+        #endif
+        if (ImGui::Begin(name, &open, flags)) {
+            RenderCore();
+        }
+        ImGui::End();
+    }
+    virtual void RenderCore() = 0;
+    virtual ~UIWindow() {}
 };
+
 inline constexpr ImGuiTableFlags pretty_table = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Resizable;

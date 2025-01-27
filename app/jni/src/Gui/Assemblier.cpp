@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-class AssemblerUI : public UIWindow {
+class AssemblierUI : public UIWindow {
 public:
-	AssemblerUI() : UIWindow("Asm") {}
+	AssemblierUI() : UIWindow("Asm") {}
 	char asmSrc[19937]{};
 	std::vector<char> program{};
 	std::string output{};
@@ -71,6 +71,6 @@ private:
 	}
 };
 
-UIWindow* MakeAssemblerUI() {
-	return new AssemblerUI();
+UIWindow* MakeAssemblierUI() {
+	return new AssemblierUI();
 }

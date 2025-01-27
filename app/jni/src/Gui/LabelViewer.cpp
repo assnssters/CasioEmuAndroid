@@ -20,9 +20,9 @@ void LabelViewer::RenderCore() {
 			ImGui::SetClipboardText(buf);
 		}
 		ImGui::PopID();
-		ImGui::SameLine();
+		ImGui::SameLine(60, 0);
 		ImGui::Text("%X", (unsigned int)lb.start);
-		ImGui::SameLine();
+		ImGui::SameLine(120, 0);
 		std::string desc = lb.desc;
 		ltrim(desc);
 		ImGui::TextUnformatted(desc.c_str());
@@ -39,9 +39,9 @@ void LabelViewer::RenderCore() {
 			ImGui::SetClipboardText(buf);
 		}
 		ImGui::PopID();
-		ImGui::SameLine();
+		ImGui::SameLine(60, 0);
 		ImGui::Text("%X", (unsigned int)lb->base);
-		ImGui::SameLine();
+		ImGui::SameLine(120, 0);
 		ImGui::TextUnformatted(lb->description.c_str());
 		ImGui::Separator();
 	}
