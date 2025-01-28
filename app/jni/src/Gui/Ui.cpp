@@ -1,5 +1,6 @@
 ﻿#include "Ui.hpp"
 #include "5800FileSystem.h"
+#include "AddressWindow.h"
 #include "CallAnalysis.h"
 #include "CasioData.h"
 #include "Chipset/Chipset.hpp"
@@ -11,21 +12,19 @@
 #include "LabelFile.h"
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
+#include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl2.h"
 #include "imgui/imgui_impl_sdlrenderer2.h"
+#include <Assemblier.h>
 #include <Gui.h>
 #include <SDL.h>
-#include "AddressWindow.h"
 #include <filesystem>
-#include <Assemblier.h>
-#include "UIScaling.h"
 
 char* n_ram_buffer = 0;
 casioemu::MMU* me_mmu = 0;
-
 SDL_Window* window = 0;
 SDL_Renderer* renderer = 0;
 
@@ -52,7 +51,7 @@ void gui_loop() {
     ImGui_ImplSDLRenderer2_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
-
+    
     for (auto win : windows) {
         win->Render();
     }
@@ -67,10 +66,6 @@ void gui_loop() {
 
     #ifdef __ANDROID__
     ImGui::SetNextWindowBgAlpha(0.0f);
-    
-    float buttonWidth = 120.0f * UI::Scaling::fontScale;
-    float buttonHeight = 40.0f * UI::Scaling::fontScale;
-    
     ImGui::Begin("Overlay", nullptr, 
         ImGuiWindowFlags_NoDecoration | 
         ImGuiWindowFlags_NoDocking | 
@@ -82,7 +77,7 @@ void gui_loop() {
     ImGui::SetWindowPos(ImVec2(UI::Scaling::padding, UI::Scaling::padding));
     
     static UIWindow* current_filter = 0;
-    ImGui::PushItemWidth(buttonWidth * 1.5f);
+    ImGui::SetNextItemWidth(UI::Scaling::labelWidth * 2);
     if (ImGui::BeginCombo("##cb", current_filter ? current_filter->name : 0)) {
         for (int n = 0; n < windows.size(); n++) {
             bool is_selected = (current_filter == windows[n]);
@@ -93,16 +88,16 @@ void gui_loop() {
         }
         ImGui::EndCombo();
     }
-    ImGui::PopItemWidth();
-    
+
     ImGui::SameLine(0, UI::Scaling::padding);
-    if (ImGui::Button("Open", ImVec2(buttonWidth, buttonHeight))) {
+    ImVec2 buttonSize(UI::Scaling::buttonHeight * 2, UI::Scaling::buttonHeight);
+    if (ImGui::Button("Open", buttonSize)) {
         if (current_filter != 0)
             current_filter->open = true;
     }
-    
+
     ImGui::SameLine(0, UI::Scaling::padding);
-    if (ImGui::Button("Close all", ImVec2(buttonWidth, buttonHeight))) {
+    if (ImGui::Button("Close all", buttonSize)) {
         for (auto& win : windows) {
             win->open = false;
         }
@@ -111,7 +106,6 @@ void gui_loop() {
     #endif
 
     ImGui::Render();
-
     #ifdef SINGLE_WINDOW
     ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
     #else
@@ -122,16 +116,25 @@ void gui_loop() {
 
 int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
     SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
-
+    
     #ifdef SINGLE_WINDOW
     window = wnd;
     renderer = rnd;
+    #else
+    #ifdef __ANDROID__
+    window = SDL_CreateWindow("CasioEmuMsvc Debugger", 
+        SDL_WINDOWPOS_CENTERED, 
+        SDL_WINDOWPOS_CENTERED, 
+        (int)UI::Scaling::windowWidth, 
+        (int)UI::Scaling::windowHeight, 
+        SDL_WINDOW_RESIZABLE);
     #else
     window = SDL_CreateWindow("CasioEmuMsvc Debugger", 
         SDL_WINDOWPOS_CENTERED, 
         SDL_WINDOWPOS_CENTERED, 
         1280, 720, 
         SDL_WINDOW_RESIZABLE);
+    #endif
     renderer = SDL_CreateRenderer(window, -1, 
         SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     #endif
@@ -144,22 +147,22 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    SetupDefaultFont();
+    
+    #ifdef __ANDROID__
+    UI::Scaling::UpdateUIScale();
+    #endif
+    
+    RebuildFont();
     SetupDefaultTheme();
+    
     io.WantCaptureKeyboard = true;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    #ifdef __ANDROID__
-    UI::Scaling::UpdateUIScale();
-    #endif
-
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer2_Init(renderer);
-    
     if (guiCreated)
         *guiCreated = true;
-
     while (!me_mmu)
         std::this_thread::sleep_for(std::chrono::microseconds(1));
 
@@ -170,19 +173,18 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
     }
 
     for (auto item : std::initializer_list<UIWindow*>{
-            new VariableWindow(),
-            new HwController(),
-            new LabelViewer(),
-            new WatchWindow(),
-            CreateCallAnalysisWindow(),
-            code_viewer = new CodeViewer(),
-            injector = new Injector(),
-            membp = new MemBreakPoint(),
-            CreateAddressWindow(),
-            MakeAssemblierUI()
-        })
+             new VariableWindow(),
+             new HwController(),
+             new LabelViewer(),
+             new WatchWindow(),
+             CreateCallAnalysisWindow(),
+             code_viewer = new CodeViewer(),
+             injector = new Injector(),
+             membp = new MemBreakPoint(),
+             CreateAddressWindow(),
+             MakeAssemblerUI(),
+             MakeThemeWindow()})
         windows.push_back(item);
-
     for (auto item : GetEditors())
         windows.push_back(item);
 

@@ -3,7 +3,9 @@
 #include "Emulator.hpp"
 #include "LabelFile.h"
 #include "imgui/imgui.h"
+#ifdef __ANDROID__
 #include "UIScaling.h"
+#endif
 
 int test_gui(bool* guiCreated,SDL_Window*,SDL_Renderer*);
 void gui_cleanup();
@@ -18,27 +20,38 @@ extern std::vector<Label> g_labels;
 void SetDebugbreak(void);
 class UIWindow {
 public:
-    UIWindow(const char* name) : name(name) {}
+    UIWindow(const char* name) : name(name) {
+        #ifdef __ANDROID__
+        inital_size = ImVec2(
+            800 * UI::Scaling::fontScale,
+            800 * UI::Scaling::fontScale
+        );
+        #else
+        inital_size = ImVec2(800, 800);
+        #endif
+    }
     const char* name{};
     bool open = true;
-    ImVec2 inital_size{800, 800};
+    ImVec2 inital_size;
     ImGuiWindowFlags flags{};
+    
     virtual void Render() {
         if (!open)
             return;
         #ifdef __ANDROID__
-        ImVec2 scaled_size = ImVec2(
-            inital_size.x * UI::Scaling::fontScale,
-            inital_size.y * UI::Scaling::fontScale
-        );
-        ImGui::SetNextWindowSize(scaled_size, ImGuiCond_FirstUseEver);
-        #else
-        ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, 
+            ImVec2(UI::Scaling::padding, UI::Scaling::padding));
         #endif
+            
+        ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
         if (ImGui::Begin(name, &open, flags)) {
             RenderCore();
         }
         ImGui::End();
+        
+        #ifdef __ANDROID__
+        ImGui::PopStyleVar();
+        #endif
     }
     virtual void RenderCore() = 0;
     virtual ~UIWindow() {}

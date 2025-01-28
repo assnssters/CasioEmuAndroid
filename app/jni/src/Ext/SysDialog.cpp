@@ -1,193 +1,312 @@
 ﻿#include "SysDialog.h"
 
 #ifdef _WIN32
-#include <ShlObj.h>
-#include <SysDialog.h>
-#include <Windows.h>
-#include <commdlg.h>
-
-std::filesystem::path SystemDialogs::OpenFileDialog() {
-    auto cwd = std::filesystem::current_path();
-    OPENFILENAME ofn;
-    TCHAR szFile[260] = {0};
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = NULL;
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = sizeof(szFile);
-    ofn.lpstrFilter = TEXT("All\0*.*\0");
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFileTitle = NULL;
-    ofn.nMaxFileTitle = 0;
-    ofn.lpstrInitialDir = NULL;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-    if (GetOpenFileName(&ofn) == TRUE) {
-        std::filesystem::current_path(cwd);
-        return std::filesystem::path(ofn.lpstrFile);
-    }
-    std::filesystem::current_path(cwd);
-    return {};
-}
-
-std::filesystem::path SystemDialogs::SaveFileDialog(std::string prefered_name) {
-    auto cwd = std::filesystem::current_path();
-    OPENFILENAME ofn;
-    TCHAR szFile[260] = {0};
-    MultiByteToWideChar(65001, 0, prefered_name.c_str(), prefered_name.size(), szFile, 260);
-    // strcpy_s(szFile, prefered_name.c_str());
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = NULL;
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = sizeof(szFile);
-    ofn.lpstrFilter = TEXT("All\0*.*\0");
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFileTitle = NULL;
-    ofn.nMaxFileTitle = 0;
-    ofn.lpstrInitialDir = NULL;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-    if (GetSaveFileName(&ofn) == TRUE) {
-        std::filesystem::current_path(cwd);
-        return std::filesystem::path(ofn.lpstrFile);
-    }
-    std::filesystem::current_path(cwd);
-    return {};
-}
-
-std::filesystem::path SystemDialogs::OpenFolderDialog() {
-    auto cwd = std::filesystem::current_path();
-    BROWSEINFO bi = {0};
-    bi.lpszTitle = TEXT("Select Folder");
-    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
-    std::filesystem::current_path(cwd);
-    if (pidl != 0) {
-        TCHAR path[MAX_PATH];
-        if (SHGetPathFromIDList(pidl, path)) {
-            return std::filesystem::path(path);
-        }
-    }
-    return {};
-}
-
-std::filesystem::path SystemDialogs::SaveFolderDialog() {
-    return OpenFolderDialog(); // In Windows, folder dialogs are usually used for both opening and saving.
-}
-#elif defined(__ANDROID__)
-
-#include <jni.h>
-#include <SDL.h>
+#include <windows.h>
+#include <shobjidl.h>
 #include <filesystem>
-#include <thread>
-#include <chrono>
+#include <functional>
 
-std::filesystem::path WaitForResult(JNIEnv* env, jobject activity) {
-    // Wait for result with timeout
-    for(int i = 0; i < 100; i++) { // Wait up to 10 seconds
-        jclass gameCls = env->FindClass("com/tele/u8emulator/Game");
-        jmethodID getLastPath = env->GetStaticMethodID(gameCls, "getLastSelectedPath", "()Ljava/lang/String;");
-        jstring result = (jstring)env->CallStaticObjectMethod(gameCls, getLastPath);
-        
-        if(result != nullptr) {
-            const char *path = env->GetStringUTFChars(result, nullptr);
-            std::string pathStr = path;
-            env->ReleaseStringUTFChars(result, path);
-            
-            if(!pathStr.empty()) {
-                return std::filesystem::path(pathStr);
+void SystemDialogs::OpenFileDialog(std::function<void(std::filesystem::path)> callback) {
+    IFileDialog* pfd;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(&pfd));
+    if (SUCCEEDED(hr)) {
+        DWORD dwOptions;
+        if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
+            pfd->SetOptions(dwOptions | FOS_FORCEFILESYSTEM);
+        }
+
+        COMDLG_FILTERSPEC rgSpec[] = {
+            {L"All Files", L"*.*"}};
+        pfd->SetFileTypes(1, rgSpec);
+
+        if (SUCCEEDED(pfd->Show(NULL))) {
+            IShellItem* psi;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR path;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                    callback(std::filesystem::path(path));
+                    CoTaskMemFree(path);
+                }
+                psi->Release();
             }
         }
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        pfd->Release();
     }
-    return {};
 }
 
-std::filesystem::path SystemDialogs::OpenFileDialog() {
-    auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
-    jmethodID openFileDialogMethod = env->GetStaticMethodID(cls, "openFileDialog",
-                                                      "(Landroid/app/Activity;)Ljava/lang/String;");
-    
-    jobject activity = (jobject)SDL_AndroidGetActivity();
-    env->CallStaticObjectMethod(cls, openFileDialogMethod, activity);
-    
-    return WaitForResult(env, activity);
+void SystemDialogs::SaveFileDialog(std::string preferred_name, std::function<void(std::filesystem::path)> callback) {
+    IFileSaveDialog* pfd;
+    HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(&pfd));
+    if (SUCCEEDED(hr)) {
+        DWORD dwOptions;
+        if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
+            pfd->SetOptions(dwOptions | FOS_FORCEFILESYSTEM);
+        }
+
+        if (!preferred_name.empty()) {
+            int needed = MultiByteToWideChar(CP_UTF8, 0, preferred_name.c_str(), -1, NULL, 0);
+            if (needed > 0) {
+                std::wstring wname(needed - 1, 0);
+                MultiByteToWideChar(CP_UTF8, 0, preferred_name.c_str(), -1, wname.data(), needed);
+                pfd->SetFileName(wname.c_str());
+            }
+        }
+
+        COMDLG_FILTERSPEC rgSpec[] = {
+            {L"All Files", L"*.*"}};
+        pfd->SetFileTypes(1, rgSpec);
+
+        if (SUCCEEDED(pfd->Show(NULL))) {
+            IShellItem* psi;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR path;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                    callback(std::filesystem::path(path));
+                    CoTaskMemFree(path);
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
 }
 
-std::filesystem::path SystemDialogs::SaveFileDialog(std::string prefered_name) {
-    auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
-    jmethodID saveFileDialogMethod = env->GetStaticMethodID(cls, "saveFileDialog",
-                                                      "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;");
-    
-    jobject activity = (jobject)SDL_AndroidGetActivity();
-    jstring jPreferedName = env->NewStringUTF(prefered_name.c_str());
-    env->CallStaticObjectMethod(cls, saveFileDialogMethod, activity, jPreferedName);
-    env->DeleteLocalRef(jPreferedName);
-    
-    return WaitForResult(env, activity);
+void SystemDialogs::OpenFolderDialog(std::function<void(std::filesystem::path)> callback) {
+    IFileDialog* pfd;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(&pfd));
+    if (SUCCEEDED(hr)) {
+        DWORD dwOptions;
+        if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
+            pfd->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+        }
+
+        if (SUCCEEDED(pfd->Show(NULL))) {
+            IShellItem* psi;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR path;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                    callback(std::filesystem::path(path));
+                    CoTaskMemFree(path);
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
 }
 
-std::filesystem::path SystemDialogs::OpenFolderDialog() {
-    auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
-    jmethodID openFolderDialogMethod = env->GetStaticMethodID(cls, "openFolderDialog",
-                                                        "(Landroid/app/Activity;)Ljava/lang/String;");
-    
-    jobject activity = (jobject)SDL_AndroidGetActivity();
-    env->CallStaticObjectMethod(cls, openFolderDialogMethod, activity);
-    
-    return WaitForResult(env, activity);
+void SystemDialogs::SaveFolderDialog(std::function<void(std::filesystem::path)> callback) {
+    IFileDialog* pfd;
+    HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(&pfd));
+    if (SUCCEEDED(hr)) {
+        DWORD dwOptions;
+        if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
+            pfd->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+        }
+
+        if (SUCCEEDED(pfd->Show(NULL))) {
+            IShellItem* psi;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR path;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                    callback(std::filesystem::path(path));
+                    CoTaskMemFree(path);
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
+}
+#endif
+
+#ifdef __ANDROID__
+#include <jni.h>
+#include <android/log.h>
+#include <SDL.h>
+#include <SDL_system.h>
+
+// Initialize static members
+std::function<void(std::filesystem::path)> SystemDialogs::fileOpenCallback;
+std::function<void(std::filesystem::path)> SystemDialogs::fileSaveCallback;
+std::function<void(std::filesystem::path)> SystemDialogs::folderOpenCallback;
+std::function<void(std::filesystem::path)> SystemDialogs::folderSaveCallback;
+
+static bool GetJNIEnv(JNIEnv **env) {
+    *env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    return (*env != NULL);
 }
 
-std::filesystem::path SystemDialogs::SaveFolderDialog() {
-    auto env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    jclass cls = env->FindClass("com/tele/u8emulator/SystemDialogs");
-    jmethodID saveFolderDialogMethod = env->GetStaticMethodID(cls, "saveFolderDialog",
-                                                        "(Landroid/app/Activity;)Ljava/lang/String;");
+void SystemDialogs::OpenFileDialog(std::function<void(std::filesystem::path)> callback) {
+    fileOpenCallback = callback;
     
-    jobject activity = (jobject)SDL_AndroidGetActivity();
-    env->CallStaticObjectMethod(cls, saveFolderDialogMethod, activity);
-    
-    return WaitForResult(env, activity);
-}
-
-#elif defined(__linux__)
-#include <cstdlib>
-#include <iostream>
-
-std::filesystem::path RunKDialog(const std::string& args) {
-    std::string command = "kdialog " + args;
-    FILE* pipe = popen(command.c_str(), "r");
-    if (!pipe)
-        return std::filesystem::path();
-
-    char buffer[128];
-    std::string result = "";
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        result += buffer;
+    JNIEnv *env;
+    if (!GetJNIEnv(&env)) {
+        return;
     }
 
-    pclose(pipe);
-    if (!result.empty() && result.back() == '\n') {
-        result.pop_back();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (!activity) {
+        return;
     }
-    return std::filesystem::path(result);
+
+    jclass systemDialogsClass = env->FindClass("com/tele/u8emulator/SystemDialogs");
+    if (!systemDialogsClass) {
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    jmethodID openFileMethod = env->GetStaticMethodID(systemDialogsClass, "openFileDialog", 
+        "(Landroid/app/Activity;)V");
+    if (!openFileMethod) {
+        env->DeleteLocalRef(systemDialogsClass);
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    env->CallStaticVoidMethod(systemDialogsClass, openFileMethod, activity);
+
+    env->DeleteLocalRef(systemDialogsClass);
+    env->DeleteLocalRef(activity);
 }
 
-std::filesystem::path SystemDialogs::OpenFileDialog() {
-    return RunKDialog("--getopenfilename");
+void SystemDialogs::SaveFileDialog(std::string preferred_name, std::function<void(std::filesystem::path)> callback) {
+    fileSaveCallback = callback;
+
+    JNIEnv *env;
+    if (!GetJNIEnv(&env)) {
+        return;
+    }
+
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (!activity) {
+        return;
+    }
+
+    jclass systemDialogsClass = env->FindClass("com/tele/u8emulator/SystemDialogs");
+    if (!systemDialogsClass) {
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    jmethodID saveFileMethod = env->GetStaticMethodID(systemDialogsClass, "saveFileDialog", 
+        "(Landroid/app/Activity;Ljava/lang/String;)V");
+    if (!saveFileMethod) {
+        env->DeleteLocalRef(systemDialogsClass);
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    jstring jPreferredName = env->NewStringUTF(preferred_name.c_str());
+    env->CallStaticVoidMethod(systemDialogsClass, saveFileMethod, activity, jPreferredName);
+
+    env->DeleteLocalRef(jPreferredName);
+    env->DeleteLocalRef(systemDialogsClass);
+    env->DeleteLocalRef(activity);
 }
 
-std::filesystem::path SystemDialogs::SaveFileDialog(std::string prefered_name) {
-    return RunKDialog("--getsavefilename");
+void SystemDialogs::OpenFolderDialog(std::function<void(std::filesystem::path)> callback) {
+    folderOpenCallback = callback;
+
+    JNIEnv *env;
+    if (!GetJNIEnv(&env)) {
+        return;
+    }
+
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (!activity) {
+        return;
+    }
+
+    jclass systemDialogsClass = env->FindClass("com/tele/u8emulator/SystemDialogs");
+    if (!systemDialogsClass) {
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    jmethodID openFolderMethod = env->GetStaticMethodID(systemDialogsClass, "openFolderDialog", 
+        "(Landroid/app/Activity;)V");
+    if (!openFolderMethod) {
+        env->DeleteLocalRef(systemDialogsClass);
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    env->CallStaticVoidMethod(systemDialogsClass, openFolderMethod, activity);
+
+    env->DeleteLocalRef(systemDialogsClass);
+    env->DeleteLocalRef(activity);
 }
 
-std::filesystem::path SystemDialogs::OpenFolderDialog() {
-    return RunKDialog("--getexistingdirectory");
+void SystemDialogs::SaveFolderDialog(std::function<void(std::filesystem::path)> callback) {
+    folderSaveCallback = callback;
+
+    JNIEnv *env;
+    if (!GetJNIEnv(&env)) {
+        return;
+    }
+
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (!activity) {
+        return;
+    }
+
+    jclass systemDialogsClass = env->FindClass("com/tele/u8emulator/SystemDialogs");
+    if (!systemDialogsClass) {
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    jmethodID saveFolderMethod = env->GetStaticMethodID(systemDialogsClass, "saveFolderDialog", 
+        "(Landroid/app/Activity;)V");
+    if (!saveFolderMethod) {
+        env->DeleteLocalRef(systemDialogsClass);
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    env->CallStaticVoidMethod(systemDialogsClass, saveFolderMethod, activity);
+
+    env->DeleteLocalRef(systemDialogsClass);
+    env->DeleteLocalRef(activity);
 }
 
-std::filesystem::path SystemDialogs::SaveFolderDialog() {
-    return OpenFolderDialog();
-}
+// JNI callbacks
+extern "C" {
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFileSelected(JNIEnv* env, jclass clazz, jstring path) {
+        if (SystemDialogs::fileOpenCallback) {
+            const char* cPath = env->GetStringUTFChars(path, nullptr);
+            SystemDialogs::fileOpenCallback(std::filesystem::path(cPath));
+            env->ReleaseStringUTFChars(path, cPath);
+        }
+    }
 
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFileSaved(JNIEnv* env, jclass clazz, jstring path) {
+        if (SystemDialogs::fileSaveCallback) {
+            const char* cPath = env->GetStringUTFChars(path, nullptr);
+            SystemDialogs::fileSaveCallback(std::filesystem::path(cPath));
+            env->ReleaseStringUTFChars(path, cPath);
+        }
+    }
+
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFolderSelected(JNIEnv* env, jclass clazz, jstring path) {
+        if (SystemDialogs::folderOpenCallback) {
+            const char* cPath = env->GetStringUTFChars(path, nullptr);
+            SystemDialogs::folderOpenCallback(std::filesystem::path(cPath));
+            env->ReleaseStringUTFChars(path, cPath);
+        }
+    }
+
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFolderSaved(JNIEnv* env, jclass clazz, jstring path) {
+        if (SystemDialogs::folderSaveCallback) {
+            const char* cPath = env->GetStringUTFChars(path, nullptr);
+            SystemDialogs::folderSaveCallback(std::filesystem::path(cPath));
+            env->ReleaseStringUTFChars(path, cPath);
+        }
+    }
+}
 #endif
