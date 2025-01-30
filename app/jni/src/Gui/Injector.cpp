@@ -29,26 +29,40 @@ bool Injector::IsHexString(const std::string& str) {
 }
 
 void Injector::InitCustomInjectionsFile() {
-    std::filesystem::path filepath = "./hc-inj.txt";
-    if (!std::filesystem::exists(filepath)) {
+    const std::filesystem::path filepath = "./hc-inj.txt";
+    
+    if (std::filesystem::exists(filepath)) {
+        return;
+    }
+
+    const std::string template_content = R"(# Custom Injection Template
+# Format: name = {
+#     address = "hex_data",
+#     address = "hex_data"
+# }
+)";
+
+    try {
         std::ofstream file(filepath);
-        if (file.is_open()) {
-            file << "# Function added by hieuxyz\n\n";
-            file << "ex1 = {\n";
-            file << "    0xd180 = \"30303030\",\n";
-            file << "    0xe9e0 = \"1234567890\"\n";
-            file << "}\n\n";
-            file << "ex2 = {\n";
-            file << "    0xd830 = \"11111111\",\n";
-            file << "    0xe9f0 = \"88888888\"\n";
-            file << "}\n";
-            file.close();
+        if (!file) {
+            throw std::runtime_error("Failed to create injection template file");
         }
+        file << template_content;
+        if (!file) {
+            throw std::runtime_error("Failed to write injection template content");
+        }
+        file.close();
+    } catch (const std::exception& e) {
+        // TODO: Add proper logging
     }
 }
 
 bool Injector::ParseCustomInjections(const std::string& content) {
     customInjections.clear();
+
+    if (content.empty()) {
+        return true;
+    }
     
     std::istringstream stream(content);
     std::string line;
@@ -102,9 +116,8 @@ bool Injector::ParseCustomInjections(const std::string& content) {
                 currentInj.pairs.push_back(pair);
             }
         }
-    }
-    
-    return !customInjections.empty();
+    }    
+    return true;
 }
 
 void Injector::LoadCustomInjections() {
@@ -181,7 +194,7 @@ void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, 
         return false;
     };
 
-    ImGui::Text("%s", "Rop.InjectAddr"_lc);
+    ImGui::TextUnformatted("Rop.InjectAddr"_lc);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     ImGui::InputText(("##addr" + std::to_string(index)).c_str(), inj.addr, 10);
@@ -252,7 +265,7 @@ void Injector::RenderCore() {
 
     if (ImGui::BeginTabBar("Rop.TabBar"_lc)) {
         if (ImGui::BeginTabItem("Rop.XAnMode"_lc)) {
-            ImGui::Text("%s", "Rop.InputSize"_lc);
+            ImGui::TextUnformatted("Rop.InputSize"_lc);
             ImGui::SameLine();
             ImGui::SetNextItemWidth(80);
             ImGui::InputText("##off", buf, 9);
@@ -336,7 +349,7 @@ void Injector::RenderCore() {
     }
 
     if (ImGui::BeginPopupModal("Rop.InfoPopup"_lc, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("%s", info_msg.c_str());
+        ImGui::TextUnformatted(info_msg.c_str());
         if (ImGui::Button("Button.Positive"_lc)) {
             show_info = false;
             ImGui::CloseCurrentPopup();
