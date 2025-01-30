@@ -28,7 +28,6 @@ public:
         }
     }
 
-    // Load language file and apply translations
     bool ChangeLanguage(const std::string& localeName) {
         try {
             m_translations.clear();
@@ -41,7 +40,6 @@ public:
             return true;
         }
         catch (const std::exception& e) {
-            // Handle errors during language loading
             char buffer[512];
             snprintf(buffer, sizeof(buffer), "Failed to load language %s: %s", 
                     localeName.c_str(), e.what());
@@ -49,12 +47,10 @@ public:
         }
     }
 
-    // Get current language code
     std::string GetCurrentLanguage() const {
         return m_currentLocale;
     }
 
-    // Get translation by key
     std::string Get(std::string_view key) const {
         auto iter = m_translations.find(std::string(key));
         if (iter == m_translations.end())
@@ -69,14 +65,13 @@ public:
         return iter->second.c_str();
     }
 
-    // Format translation with parameters
     template <typename... Args>
-    std::string Format(std::string_view key, Args&&... args) const {
+    std::string Format(std::string_view key, const Args&... args) const {
         std::string text = Get(key);
         char buffer[1024];
         try {
             snprintf(buffer, sizeof(buffer), text.c_str(), 
-                    std::forward<Args>(args)...);
+                    ToString(args)...);
             return std::string(buffer);
         }
         catch (const std::exception& e) {
@@ -88,7 +83,6 @@ public:
         }
     }
 
-    // Get plural form based on count
     std::string GetPlural(std::string_view key, int count) const {
         std::string baseKey(key);
         auto pluralRule = m_pluralRules.find(baseKey);
@@ -105,7 +99,6 @@ public:
         return Format(Get(key), count);
     }
 
-    // Operator overload for easy access
     std::string operator[](std::string_view key) const {
         return Get(key);
     }
@@ -121,7 +114,16 @@ private:
     std::unordered_map<std::string, std::string> m_translations;
     std::unordered_map<std::string, std::vector<PluralRule>> m_pluralRules;
 
-    // Load translations from file
+    // Helper method to convert arguments to const char*
+    template<typename T>
+    static auto ToString(const T& value) -> decltype(value) {
+        return value;
+    }
+    
+    static const char* ToString(const std::string& str) {
+        return str.c_str();
+    }
+
     void LoadTranslations(const std::string& localeName) {
         std::filesystem::path filePath = 
             std::filesystem::path(m_basePath) / (localeName + ".lc");
@@ -153,7 +155,6 @@ private:
         }
     }
 
-    // Process single line from translation file
     void ProcessLine(const std::string& line) {
         std::istringstream lineStream(line);
         std::string key, value;
@@ -170,7 +171,6 @@ private:
             throw LocalizationException("Empty key");
         }
 
-        // Handle plural forms
         if (key.ends_with("|plural")) {
             ProcessPluralForm(key.substr(0, key.length() - 7), value);
         }
@@ -179,7 +179,6 @@ private:
         }
     }
 
-    // Process plural form definition
     void ProcessPluralForm(const std::string& key, const std::string& value) {
         std::istringstream ss(value);
         std::string rule;
@@ -197,7 +196,6 @@ private:
         }
     }
 
-    // Evaluate plural rule condition
     bool EvaluatePluralCondition(const std::string& condition, int count) const {
         if (condition == "one")
             return count == 1;
@@ -210,7 +208,6 @@ private:
         return condition == "other";
     }
 
-    // Decode escape sequences in string
     static std::string DecodeEscapes(const std::string& input) {
         std::string result;
         result.reserve(input.length());
@@ -245,7 +242,6 @@ private:
         return result;
     }
 
-    // Trim whitespace from string
     static std::string Trim(std::string_view str) {
         const auto start = str.find_first_not_of(" \t\r\n");
         if (start == std::string_view::npos)
@@ -256,24 +252,21 @@ private:
     }
 };
 
-// Global localization instance
 extern Localization g_local;
 
-// String literal operator for translations
 inline std::string operator""_l(const char* str, size_t) {
     return g_local[str];
 }
+
 inline const char* operator""_lc(const char* str, size_t) {
     return g_local.GetCStr(str);
 }
 
-// Format translation with parameters
 template <typename... Args>
-inline std::string localstr(std::string_view key, Args&&... args) {
-    return g_local.Format(key, std::forward<Args>(args)...);
+inline std::string localstr(std::string_view key, const Args&... args) {
+    return g_local.Format(key, args...);
 }
 
-// Get plural form for count
 inline std::string plural(std::string_view key, int count) {
     return g_local.GetPlural(key, count);
 }

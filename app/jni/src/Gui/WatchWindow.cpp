@@ -146,8 +146,8 @@ void WatchWindow::RenderCore() {
 	using casioemu::Chipset::RM_HALT;
 	using casioemu::Chipset::RM_RUN;
 	using casioemu::Chipset::RM_STOP;
-	ImGui::Text("%s", "WatchWindow.CoreStatus"_lc,
-		rm == RM_RUN ? "Run" : (rm == RM_STOP ? "Stop" : (rm == RM_HALT ? "Halt" : "?")));
+    ImGui::TextUnformatted(("WatchWindow.CoreStatus"_l + ": " + 
+        (rm == RM_RUN ? "Run" : (rm == RM_STOP ? "Stop" : (rm == RM_HALT ? "Halt" : "?")))).c_str());
 	// ImGui::Text("Psw");
 	// for (size_t i = 0; i < 8; i++) {
 	//	ImGui::SameLine(i * 25. + 50.);

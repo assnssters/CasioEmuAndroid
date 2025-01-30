@@ -1,5 +1,4 @@
-﻿
-#include <algorithm>
+﻿#include <algorithm>
 #include "LabelViewer.h"
 #include "Models.h"
 #include "Ui.hpp"

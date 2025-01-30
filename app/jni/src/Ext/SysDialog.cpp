@@ -129,12 +129,21 @@ void SystemDialogs::SaveFolderDialog(std::function<void(std::filesystem::path)> 
 #include <android/log.h>
 #include <SDL.h>
 #include <SDL_system.h>
+#include <fstream>
 
 // Initialize static members
 std::function<void(std::filesystem::path)> SystemDialogs::fileOpenCallback;
 std::function<void(std::filesystem::path)> SystemDialogs::fileSaveCallback;
 std::function<void(std::filesystem::path)> SystemDialogs::folderOpenCallback;
 std::function<void(std::filesystem::path)> SystemDialogs::folderSaveCallback;
+
+void WriteFile(const std::filesystem::path& path, const std::vector<unsigned char>& data) {
+    std::ofstream file(path, std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("Cannot open file for writing");
+    }
+    file.write(reinterpret_cast<const char*>(data.data()), data.size());
+}
 
 static bool GetJNIEnv(JNIEnv **env) {
     *env = (JNIEnv*)SDL_AndroidGetJNIEnv();
@@ -277,18 +286,52 @@ void SystemDialogs::SaveFolderDialog(std::function<void(std::filesystem::path)> 
 
 // JNI callbacks
 extern "C" {
-    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFileSelected(JNIEnv* env, jclass clazz, jstring path) {
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFileSelected(JNIEnv* env, jclass clazz, jstring path, jbyteArray data) {
         if (SystemDialogs::fileOpenCallback) {
             const char* cPath = env->GetStringUTFChars(path, nullptr);
-            SystemDialogs::fileOpenCallback(std::filesystem::path(cPath));
-            env->ReleaseStringUTFChars(path, cPath);
-        }
-    }
-
-    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFileSaved(JNIEnv* env, jclass clazz, jstring path) {
-        if (SystemDialogs::fileSaveCallback) {
-            const char* cPath = env->GetStringUTFChars(path, nullptr);
-            SystemDialogs::fileSaveCallback(std::filesystem::path(cPath));
+            jbyte* bytes = env->GetByteArrayElements(data, nullptr);
+            jsize length = env->GetArrayLength(data);
+            
+            if (bytes == nullptr || length == 0) {
+                SDL_Log("Error: Received empty or null data");
+                if (bytes) env->ReleaseByteArrayElements(data, bytes, JNI_ABORT);
+                if (cPath) env->ReleaseStringUTFChars(path, cPath);
+                return;
+            }
+    
+            std::vector<unsigned char> fileData(bytes, bytes + length);
+            std::filesystem::path tempDir = "./tmp";
+            std::filesystem::create_directories(tempDir);
+            std::filesystem::path fileName = std::filesystem::path(cPath).filename();
+            std::filesystem::path tempPath = tempDir / fileName;
+    
+            try {
+                std::ofstream test(tempPath, std::ios::binary);
+                if (!test) {
+                    throw std::runtime_error("Cannot create temp file for writing");
+                }
+                test.close();
+                
+                WriteFile(tempPath, fileData);
+                SDL_Log("Successfully wrote temp file: %s", tempPath.string().c_str());
+                SDL_Log("File size: %zu bytes", fileData.size());
+                
+                SystemDialogs::fileOpenCallback(tempPath);
+                std::error_code ec;
+                std::filesystem::remove(tempPath, ec);
+                if(ec) {
+                    SDL_Log("Failed to remove temp file: %s", ec.message().c_str());
+                }
+                std::filesystem::remove(tempDir, ec);
+                if(ec) {
+                    SDL_Log("Failed to remove temp directory: %s", ec.message().c_str());
+                }
+            }
+            catch (const std::exception& e) {
+                SDL_Log("Failed to write temp file: %s", e.what());
+            }
+    
+            env->ReleaseByteArrayElements(data, bytes, JNI_ABORT);
             env->ReleaseStringUTFChars(path, cPath);
         }
     }
@@ -306,6 +349,18 @@ extern "C" {
             const char* cPath = env->GetStringUTFChars(path, nullptr);
             SystemDialogs::folderSaveCallback(std::filesystem::path(cPath));
             env->ReleaseStringUTFChars(path, cPath);
+        }
+    }
+    
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onExportFailed(JNIEnv* env, jclass clazz) {
+        SDL_Log("Export failed");
+    }
+
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onFileSaved(JNIEnv* env, jclass clazz, jstring uri) {
+        if (SystemDialogs::fileSaveCallback) {
+            const char* cUri = env->GetStringUTFChars(uri, nullptr);
+            SystemDialogs::fileSaveCallback(std::filesystem::path(cUri));
+            env->ReleaseStringUTFChars(uri, cUri);
         }
     }
 }
