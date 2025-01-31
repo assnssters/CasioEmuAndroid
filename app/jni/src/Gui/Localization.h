@@ -36,7 +36,7 @@ public:
             m_currentLocale = localeName;
             std::filesystem::path filePath = 
                 std::filesystem::path(m_basePath) / (localeName + ".lc");
-            
+
             if (std::filesystem::exists(filePath)) {
                 LoadTranslationsFromFile(filePath);
             }
@@ -141,7 +141,7 @@ private:
     static auto ToString(const T& value) -> decltype(value) {
         return value;
     }
-    
+
     static const char* ToString(const std::string& str) {
         return str.c_str();
     }
