@@ -1,7 +1,7 @@
 ﻿#include "HwController.h"
-#include "..\Config.hpp"
+#include "../Config.hpp"
 #include "Ui.hpp"
-#include "imgui\imgui.h"
+#include "imgui/imgui.h"
 #include "Chipset.hpp"
 #include "Localization.h"
 int screen_flashing_threshold = 20;
@@ -48,7 +48,7 @@ void HwController::RenderCore() {
 		m_emu->cycles.Setup((Uint64)1 << cps, m_emu->cycles.timer_interval);
 	}
 	ImGui::Text("%.6f MHz", (double)m_emu->cycles.cycles_per_second / 1024 / 1024);
-	static int pd = m_emu->modeldef.pd_value;
+	static int pd = m_emu->ModelDefinition.pd_value;
 	static bool pdx[8];
 
 	// 初始化 pdx 数组，基于 pd 的初始值
@@ -78,13 +78,21 @@ void HwController::RenderCore() {
 				pd |= (1 << i);
 			}
 		}
-		m_emu->modeldef.pd_value = pd;
+		m_emu->ModelDefinition.pd_value = pd;
 	}
 
 	static int irq = 0;
 	ImGui::InputInt("##0d000721",&irq);
 	if (ImGui::Button("HwController.Interrupt"_lc)) {
 		m_emu->chipset.RaiseMaskable(irq);
+	}
+	if (ImGui::Button("HwController.HotReload"_lc)) {
+		m_emu->SetPaused(true);
+		auto lg = std::lock_guard(m_emu->access_mx);
+		std::ifstream rom_handle(m_emu->GetModelFilePath(m_emu->ModelDefinition.rom_path), std::ifstream::binary);
+		if (rom_handle.fail())
+			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
+		m_emu->chipset.rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
 	}
 	//	static char buf4[40];
 	//	ImGui::InputText("##cps_in", buf4, 40);

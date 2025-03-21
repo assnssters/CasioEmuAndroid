@@ -1,6 +1,7 @@
 ﻿#include "Ui.hpp"
 #include "5800FileSystem.h"
 #include "AddressWindow.h"
+#include "BitmapViewer.h"
 #include "CallAnalysis.h"
 #include "CasioData.h"
 #include "Chipset/Chipset.hpp"
@@ -179,21 +180,22 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
         windows.push_back(CreateFx5800FileSystem());
     }
 
-    for (auto item : std::initializer_list<UIWindow*>{
-             new VariableWindow(),
-             new HwController(),
-             new LabelViewer(),
-             new WatchWindow(),
-             CreateCallAnalysisWindow(),
-             code_viewer = new CodeViewer(),
-             injector = new Injector(),
-             membp = new MemBreakPoint(),
-             CreateAddressWindow(),
-             MakeAssemblerUI(),
-             MakeThemeWindow()})
-        windows.push_back(item);
-    for (auto item : GetEditors())
-        windows.push_back(item);
+	for (auto item : std::initializer_list<UIWindow*>{
+			 new VariableWindow(),
+			 new HwController(),
+			 new LabelViewer(),
+			 new WatchWindow(),
+			 CreateCallAnalysisWindow(),
+			 code_viewer = new CodeViewer(),
+			 injector = new Injector(),
+			 membp = new MemBreakPoint(),
+			 CreateAddressWindow(),
+			 MakeAssemblerUI(),
+			 MakeThemeWindow(),
+			 CreateBitmapViewer()})
+		windows.push_back(item);
+	for (auto item : GetEditors())
+		windows.push_back(item);
 
     #ifdef __ANDROID__
     for (auto item : windows) {

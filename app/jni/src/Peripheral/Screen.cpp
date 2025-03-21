@@ -214,45 +214,45 @@ namespace casioemu {
                         else
                                 ratio = 1 - 5e-4;
 
-                        if constexpr (hardware_id == HW_TI) {
-                                ratio = 1 - 1e-4;
-                                if (!ti_enabled) {
-                                        for (size_t i = 0; i < 65 * 192; i++) {
-                                                screen_ink_alpha[i] *= ratio;
-                                        }
-                                        return;
-                                }
-                                if (!n_ram_buffer) //  || !emulator.chipset.ti_status_buf) //  || !emulator.chipset.ti_screen_buf
-                                        return;
-                                float ink_alpha_on = (ti_contrast - 100) * 20.0;
-                                float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
-                                ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
-                                uint8_t* screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xE708;
-                                if (emulator.modeldef.real_hardware) {
-                                        screen_buffer = this->screen_buffer;
-                                }
-                                for (int ix = 0; ix < 192; ++ix) {
-                                        for (int iy = 0; iy < 64; ++iy) {
-                                                uint32_t i = (ix << 6) | iy;
-                                                int bIndx = (i >> 3);
-                                                int subIndx = (i & 7);
-                                                int mask = (1 << subIndx);
-                                                bool on = (screen_buffer[bIndx] & mask) != 0;
-                                                auto& data = screen_ink_alpha[(iy * 192 + 192) + ix];
-                                                data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-                                        }
-                                }
-                                screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
-                                if (emulator.modeldef.real_hardware) {
-                                        screen_buffer = this->screen_buffer + 8 * 192;
-                                }
-                                int x = 0;
-                                for (int ix = 1; ix != SPR_MAX; ++ix) {
-                                        auto off = sprite_bitmap[ix].offset;
-                                        auto& data = screen_ink_alpha[x];
-                                        data = data * ratio + ((screen_buffer[off] & sprite_bitmap[ix].mask) ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-                                        x++;
-                                }
+			if constexpr (hardware_id == HW_TI) {
+				ratio = 1 - 1e-4;
+				if (!ti_enabled) {
+					for (size_t i = 0; i < 65 * 192; i++) {
+						screen_ink_alpha[i] *= ratio;
+					}
+					return;
+				}
+				if (!n_ram_buffer) //  || !emulator.chipset.ti_status_buf) //  || !emulator.chipset.ti_screen_buf
+					return;
+				float ink_alpha_on = (ti_contrast - 100) * 20.0;
+				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
+				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
+				uint8_t* screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xE708;
+				if (emulator.ModelDefinition.real_hardware) {
+					screen_buffer = this->screen_buffer;
+				}
+				for (int ix = 0; ix < 192; ++ix) {
+					for (int iy = 0; iy < 64; ++iy) {
+						uint32_t i = (ix << 6) | iy;
+						int bIndx = (i >> 3);
+						int subIndx = (i & 7);
+						int mask = (1 << subIndx);
+						bool on = (screen_buffer[bIndx] & mask) != 0;
+						auto& data = screen_ink_alpha[(iy * 192 + 192) + ix];
+						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+					}
+				}
+				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
+				if (emulator.ModelDefinition.real_hardware) {
+					screen_buffer = this->screen_buffer + 8 * 192;
+				}
+				int x = 0;
+				for (int ix = 1; ix != SPR_MAX; ++ix) {
+					auto off = sprite_bitmap[ix].offset;
+					auto& data = screen_ink_alpha[x];
+					data = data * ratio + ((screen_buffer[off] & sprite_bitmap[ix].mask) ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+					x++;
+				}
 
                                 return;
                         }
@@ -634,155 +634,155 @@ namespace casioemu {
                 {"rsd_up", 0x80, 0x0B},
                 {"rsd_disp", 0x10, 0x0B}};
 
-        template <HardwareId hardware_id>
-        void Screen<hardware_id>::Initialise() {
-                if (!inited) {
-                        renderer = emulator.GetRenderer();
-                        interface_texture = emulator.GetInterfaceTexture();
-                        sprite_info.resize(SPR_MAX);
-                        for (int ix = 0; ix != SPR_MAX; ++ix)
-                                sprite_info[ix] = emulator.modeldef.sprites[sprite_bitmap[ix].name];
+	template <HardwareId hardware_id>
+	void Screen<hardware_id>::Initialise() {
+		if (!inited) {
+			renderer = emulator.GetRenderer();
+			interface_texture = emulator.GetInterfaceTexture();
+			sprite_info.resize(SPR_MAX);
+			for (int ix = 0; ix != SPR_MAX; ++ix)
+				sprite_info[ix] = emulator.ModelDefinition.sprites[sprite_bitmap[ix].name];
 
-                        ink_colour = emulator.modeldef.ink_color;
-                        if constexpr (hardware_id == HW_TI) {
-                                screen_buffer = new uint8_t[192 * 9];
-                                // TODO: remove this
-                                memset(screen_buffer, 0, 192 * 9);
-                                // fillRandomData(screen_buffer, 192*9);
-                        }
-                        else {
-                                screen_buffer = new uint8_t[(N_ROW + 1) * ROW_SIZE];
-                                fillRandomData(screen_buffer, (N_ROW + 1) * ROW_SIZE);
-                        }
-                        if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-                                region_power.Setup(
-                                        0xF03D, 1, "Screen/Power", this,
-                                        [](MMURegion* region, size_t offset) {
-                                                return ((Screen*)region->userdata)->screen_power;
-                                        },
-                                        [](MMURegion* region, size_t offset, uint8_t data) {
-                                                ((Screen*)region->userdata)->screen_power = data & 0xf;
-                                                if ((data & 1) == 0) { // 关闭屏幕
-                                                        ((Screen*)region->userdata)->Uninitialise();
-                                                }
-                                                else {
-                                                        ((Screen*)region->userdata)->Initialise();
-                                                }
-                                        },
-                                        emulator);
-                        }
-                        if constexpr (hardware_id == HW_CLASSWIZ_II) {
-                                screen_buffer1 = new uint8_t[(N_ROW + 1) * ROW_SIZE];
-                                fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
-                        }
-                        inited = true;
-                }
-                if constexpr (hardware_id == HW_TI) {
-                        auto pp = emulator.chipset.QueryInterface<IPortProvider>();
-                        pp->SetPortOutputCallback(7, [&](uint8_t data) {
-                                ti_port7 = data;
-                        });
-                        pp->SetPortOutputCallback(5, [&](uint8_t data) {
-                                // ti_port5 = data;
-                                if (ti_a0 && !(data & 0x40)) {
-                                        if ((data & 0x10)) {
-                                                auto bit_off = ti_col;
-                                                auto off = bit_off + ti_page * 192;
-                                                if (off > 192 * 9) {
-                                                        return;
-                                                }
-                                                if (off > 192 * 8) {
-                                                        std::cout << std::dec << off - 192 * 8 << " <- 0x" << std::hex << ti_port7 << "\n";
-                                                }
-                                                screen_buffer[off] = ti_port7;
-                                                ti_col++;
-                                                if (ti_col >= 192) {
-                                                        ti_col = 0;
-                                                        ti_page++;
-                                                }
-                                        }
-                                        else {
-                                                auto data = ti_port7;
-                                                switch (ti_port_status) {
-                                                case 0: {
-                                                        auto dh = data >> 4;
-                                                        if (dh == 0) {
-                                                                ti_col = (ti_col & 0xf0) | (data & 0xf);
-                                                        }
-                                                        else if (dh == 1) {
-                                                                ti_col = (ti_col & 0xf) | ((data & 0xf) << 4);
-                                                        }
-                                                        else if ((dh & 0b1100) == 0b0100) {
-                                                                // std::cout << "Set Scroll line " << (data & 0x3f) << "\n";
-                                                        }
-                                                        else if (dh == 0b1011) {
-                                                                // std::cout << "Set page  " << (data & 0xf) << "\n";
-                                                                ti_page = (data & 0xf);
-                                                        }
-                                                        else if ((data >> 3) == 17) {
-                                                                // std::cout << "Set addressing mode\n";
-                                                        }
-                                                        else if ((data >> 2) == 58) {
-                                                                // std::cout << "Set bias\n";
-                                                        }
-                                                        else if ((data >> 2) == 40) {
-                                                                // std::cout << "Set frame rate\n";
-                                                        }
-                                                        else if ((data >> 1) == 82) {
-                                                                // std::cout << "Clear all display segments\n";
-                                                        }
-                                                        else if ((data >> 1) == 83) {
-                                                                // std::cout << "Set inverse display\n";
-                                                        }
-                                                        else if ((data & 0xf9) == 0xc0) {
-                                                                // std::cout << "Set Com Seg Scan Direction\n";
-                                                        }
-                                                        else if (data == 0xe3) {
-                                                                // std::cout << "Nop\n";
-                                                        }
-                                                        else if (data == 0xe2) {
-                                                                // std::cout << "Software reset\n";
-                                                        }
-                                                        else if (data == 0xaf) {
-                                                                // std::cout << "Enabled screen!\n";
-                                                                ti_enabled = 1;
-                                                        }
-                                                        else if (data == 0x81) {
-                                                                ti_port_status = 1;
-                                                        }
-                                                        else if (data == 0xae) {
-                                                                // std::cout << "Disabled screen!\n";
-                                                                ti_enabled = 0;
-                                                        }
-                                                        else {
-                                                                std::cout << "[Screen][Warn] Unknown ST7525 command: 0x" << std::hex << (int)data << "\n";
-                                                        }
-                                                        break;
-                                                }
-                                                case 1:
-                                                        // std::cout << "Set contrast!\n";
-                                                        ti_contrast = data;
-                                                        ti_port_status = 0;
-                                                        break;
-                                                }
-                                        }
-                                }
-                                ti_a0 = (data & 0x40);
-                        });
-                        return;
-                }
-                if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) || (!enabled_2 && (screen_power & 1))) {
-                        if constexpr (hardware_id != HW_CLASSWIZ_II) {
-                                region_buffer.Setup(
-                                        0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion* region, size_t offset) {
-                                offset -= region->base;
-                                if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-                                        return (uint8_t)0;
-                                return ((Screen*)region->userdata)->screen_buffer[offset]; },
-                                        [](MMURegion* region, size_t offset, uint8_t data) {
-                                        offset -= region->base;
-                                        if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-                                                return;
+			ink_colour = emulator.ModelDefinition.ink_color;
+			if constexpr (hardware_id == HW_TI) {
+				screen_buffer = new uint8_t[192 * 9];
+				// TODO: remove this
+				memset(screen_buffer, 0, 192 * 9);
+				// fillRandomData(screen_buffer, 192*9);
+			}
+			else {
+				screen_buffer = new uint8_t[(N_ROW + 1) * ROW_SIZE];
+				fillRandomData(screen_buffer, (N_ROW + 1) * ROW_SIZE);
+			}
+			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
+				region_power.Setup(
+					0xF03D, 1, "Screen/Power", this,
+					[](MMURegion* region, size_t offset) {
+						return ((Screen*)region->userdata)->screen_power;
+					},
+					[](MMURegion* region, size_t offset, uint8_t data) {
+						((Screen*)region->userdata)->screen_power = data & 0xf;
+						if ((data & 1) == 0) { // 关闭屏幕
+							((Screen*)region->userdata)->Uninitialise();
+						}
+						else {
+							((Screen*)region->userdata)->Initialise();
+						}
+					},
+					emulator);
+			}
+			if constexpr (hardware_id == HW_CLASSWIZ_II) {
+				screen_buffer1 = new uint8_t[(N_ROW + 1) * ROW_SIZE];
+				fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
+			}
+			inited = true;
+		}
+		if constexpr (hardware_id == HW_TI) {
+			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
+			pp->SetPortOutputCallback(7, [&](uint8_t data) {
+				ti_port7 = data;
+			});
+			pp->SetPortOutputCallback(5, [&](uint8_t data) {
+				// ti_port5 = data;
+				if (ti_a0 && !(data & 0x40)) {
+					if ((data & 0x10)) {
+						auto bit_off = ti_col;
+						auto off = bit_off + ti_page * 192;
+						if (off > 192 * 9) {
+							return;
+						}
+						if (off > 192 * 8) {
+							std::cout << std::dec << off - 192 * 8 << " <- 0x" << std::hex << ti_port7 << "\n";
+						}
+						screen_buffer[off] = ti_port7;
+						ti_col++;
+						if (ti_col >= 192) {
+							ti_col = 0;
+							ti_page++;
+						}
+					}
+					else {
+						auto data = ti_port7;
+						switch (ti_port_status) {
+						case 0: {
+							auto dh = data >> 4;
+							if (dh == 0) {
+								ti_col = (ti_col & 0xf0) | (data & 0xf);
+							}
+							else if (dh == 1) {
+								ti_col = (ti_col & 0xf) | ((data & 0xf) << 4);
+							}
+							else if ((dh & 0b1100) == 0b0100) {
+								// std::cout << "Set Scroll line " << (data & 0x3f) << "\n";
+							}
+							else if (dh == 0b1011) {
+								// std::cout << "Set page  " << (data & 0xf) << "\n";
+								ti_page = (data & 0xf);
+							}
+							else if ((data >> 3) == 17) {
+								// std::cout << "Set addressing mode\n";
+							}
+							else if ((data >> 2) == 58) {
+								// std::cout << "Set bias\n";
+							}
+							else if ((data >> 2) == 40) {
+								// std::cout << "Set frame rate\n";
+							}
+							else if ((data >> 1) == 82) {
+								// std::cout << "Clear all display segments\n";
+							}
+							else if ((data >> 1) == 83) {
+								// std::cout << "Set inverse display\n";
+							}
+							else if ((data & 0xf9) == 0xc0) {
+								// std::cout << "Set Com Seg Scan Direction\n";
+							}
+							else if (data == 0xe3) {
+								// std::cout << "Nop\n";
+							}
+							else if (data == 0xe2) {
+								// std::cout << "Software reset\n";
+							}
+							else if (data == 0xaf) {
+								// std::cout << "Enabled screen!\n";
+								ti_enabled = 1;
+							}
+							else if (data == 0x81) {
+								ti_port_status = 1;
+							}
+							else if (data == 0xae) {
+								// std::cout << "Disabled screen!\n";
+								ti_enabled = 0;
+							}
+							else {
+								std::cout << "[Screen][Warn] Unknown ST7525 command: 0x" << std::hex << (int)data << "\n";
+							}
+							break;
+						}
+						case 1:
+							// std::cout << "Set contrast!\n";
+							ti_contrast = data;
+							ti_port_status = 0;
+							break;
+						}
+					}
+				}
+				ti_a0 = (data & 0x40);
+			});
+			return;
+		}
+		if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) || (!enabled_2 && (screen_power & 1))) {
+			if constexpr (hardware_id != HW_CLASSWIZ_II) {
+				region_buffer.Setup(
+					0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion* region, size_t offset) {
+				offset -= region->base;
+				if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+					return (uint8_t)0;
+				return ((Screen*)region->userdata)->screen_buffer[offset]; },
+					[](MMURegion* region, size_t offset, uint8_t data) {
+					offset -= region->base;
+					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+						return;
 
                                         auto this_obj = (Screen*)region->userdata;
                                         this_obj->screen_buffer[offset] = data; },
@@ -807,32 +807,32 @@ namespace casioemu {
                                                 if (offset % ROW_SIZE >= ROW_SIZE_DISP)
                                                         return;
 
-                                                auto this_obj = (Screen*)region->userdata;
-                                                if (!(this_obj->screen_mode & 0x40)) {
-                                                        this_obj->screen_buffer1[offset] = this_obj->screen_buffer[offset] = data;
-                                                        return;
-                                                }
-                                                if (this_obj->screen_select & 0x04) {
-                                                        this_obj->screen_buffer1[offset] = data;
-                                                }
-                                                else {
-                                                        this_obj->screen_buffer[offset] = data;
-                                                }
-                                        },
-                                        emulator);
-                                if (!emulator.modeldef.real_hardware) {
-                                        // region_buffer.Setup(
-                                        //        0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this,
-                                        //        [](MMURegion* region, size_t offset) {
-                                        //                offset -= region->base;
-                                        //                if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-                                        //                        return (uint8_t)0;
-                                        //                return ((Screen*)region->userdata)->screen_buffer[offset];
-                                        //        },
-                                        //        [](MMURegion* region, size_t offset, uint8_t data) {
-                                        //                offset -= region->base;
-                                        //                if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-                                        //                        return;
+						auto this_obj = (Screen*)region->userdata;
+						if (!(this_obj->screen_mode & 0x40)) {
+							this_obj->screen_buffer1[offset] = this_obj->screen_buffer[offset] = data;
+							return;
+						}
+						if (this_obj->screen_select & 0x04) {
+							this_obj->screen_buffer1[offset] = data;
+						}
+						else {
+							this_obj->screen_buffer[offset] = data;
+						}
+					},
+					emulator);
+				if (!emulator.ModelDefinition.real_hardware) {
+					// region_buffer.Setup(
+					//	0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this,
+					//	[](MMURegion* region, size_t offset) {
+					//		offset -= region->base;
+					//		if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+					//			return (uint8_t)0;
+					//		return ((Screen*)region->userdata)->screen_buffer[offset];
+					//	},
+					//	[](MMURegion* region, size_t offset, uint8_t data) {
+					//		offset -= region->base;
+					//		if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+					//			return;
 
                                         //                auto this_obj = (Screen*)region->userdata;
                                         //                this_obj->screen_buffer[offset] = data;
@@ -998,7 +998,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                         region_buffer.Kill();
                 }
                 else {
-                        if (!emulator.modeldef.real_hardware) {
+                        if (!emulator.ModelDefinition.real_hardware) {
                                 region_buffer.Kill();
                                 region_buffer1.Kill();
                         }
@@ -1184,9 +1184,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                 // Get the renderer output size if not already available
                 SDL_GetRendererOutputSize(renderer, &screenWidth, &screenHeight);
 
-                if (!emulator.modeldef.enable_new_screen) {
-                        SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
-                }
+		if (!emulator.ModelDefinition.enable_new_screen) {
+			SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
+		}
 
                 // Store all the rendering rectangles (sprites and pixel areas)
                 std::vector<SDL_Rect> spriteRects;
@@ -1196,7 +1196,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                 for (int ix = 1; ix != SPR_MAX; ++ix) {
                         SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x], 0, 255)));
                         x++;
-                        SDL_RenderCopy(renderer, interface_texture, &sprite_info[ix].src, &sprite_info[ix].dest);
+						SDL_Rect tmp1 = sprite_info[ix].src;
+						SDL_Rect tmp2 = sprite_info[ix].dest;
+                        SDL_RenderCopy(renderer, interface_texture, &tmp1, &tmp2);
                         // Store the sprite rectangle for later
                         spriteRects.push_back(sprite_info[ix].dest);
                 }
@@ -1222,7 +1224,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                                                 SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x + iy2 * 192], 0, 255)));
                                         }
                                         x++;
-                                        SDL_RenderCopy(renderer, interface_texture, &sprite_info[SPR_PIXEL].src, &dest);
+										SDL_Rect tmp1 = sprite_info[SPR_PIXEL].src;
+                                        SDL_RenderCopy(renderer, interface_texture, &tmp1, &dest);
                                         // Store the pixel rectangle for later
                                         pixelRects.push_back(dest);
                                 }

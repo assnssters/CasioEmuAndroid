@@ -1,10 +1,18 @@
 ﻿#pragma once
-#include <SDL.h>
 #include <map>
 #include <string>
 #include <vector>
 
 #include "Binary.h"
+struct Rect {
+	int x, y;
+	int w, h;
+#ifdef SDL_rect_h_
+	constexpr operator SDL_Rect() const {
+		return {x, y, w, h};
+	}
+#endif
+};
 namespace casioemu {
 	enum HardwareId {
 		HW_MIN = 3,
@@ -18,13 +26,13 @@ namespace casioemu {
 		HW_MAX = 8,
 	};
 	struct SpriteInfo {
-		SDL_Rect src, dest;
+		Rect src, dest;
 	};
 	struct ColourInfo {
 		int r, g, b;
 	};
 	struct ButtonInfo {
-		SDL_Rect rect{};
+		Rect rect{};
 		int kiko{};
 		std::string keyname;
 		void Write(std::ostream& stm) const {
