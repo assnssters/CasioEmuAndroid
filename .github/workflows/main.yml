@@ -15,8 +15,16 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        submodules: true
+      # with:
+        # submodules: true
+
+    - name: Clone SDL2 and dependencies
+      if: steps.cache-sdl.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/app/jni"
+        cd "$GITHUB_WORKSPACE/app/jni"
+        git clone -b release-2.30.3 https://github.com/libsdl-org/SDL.git
+        git clone -b SDL2 https://github.com/libsdl-org/SDL_image.git
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
