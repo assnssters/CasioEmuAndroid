@@ -1,8 +1,0 @@
-[submodule "app/jni/SDL"]
-	path = app/jni/SDL
-	url = https://github.com/libsdl-org/SDL.git
-	branch = release-2.30.x
-[submodule "app/jni/SDL_image"]
-	path = app/jni/SDL_image
-	url = https://github.com/libsdl-org/SDL_image.git
-	branch = SDL2
